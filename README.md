@@ -11,6 +11,11 @@ cmake .. && make
 ./delivery_sim ../config/equipetrol.json
 ```
 
+El único flag opcional es `--log <ruta>`, que cambia el archivo del log de eventos (por defecto `events.log`).
+Si falta el argumento, el archivo no se puede leer, el JSON está mal formado o falta una propiedad
+obligatoria, el programa imprime el motivo en stderr y sale con estado distinto de cero sin simular.
+Un archivo de configuración mínimo y válido está en `tests/config/minimal.json`.
+
 Con ThreadSanitizer:
 
 ```sh

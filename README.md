@@ -22,6 +22,7 @@ cmake -DENABLE_TSAN=ON .. && make
 - cmake ≥ 3.11
 - make
 - g++ ≥ 7 o clang equivalente, con soporte C++17
+- nlohmann/json 3.12.0 (incluida en `third_party/nlohmann/`, licencia MIT; no requiere instalación)
 
 ## Mapa
 

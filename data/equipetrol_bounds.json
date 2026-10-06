@@ -1,8 +1,9 @@
 {
   "image": "equipetrol.png",
-  "width": 1771,
-  "height": 1859,
+  "width": 712,
+  "height": 991,
   "zoom": 16,
-  "bounds": { "north": -17.746, "south": -17.784, "west": -63.218, "east": -63.180 },
+  "bounds": { "north": -17.752704, "south": -17.772971, "west": -63.203708, "east": -63.18842 },
+  "zone": "equipetrol_zone.json",
   "attribution": "© OpenStreetMap contributors"
 }

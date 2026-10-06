@@ -16,6 +16,7 @@ find_package(Threads REQUIRED)
 add_executable(delivery_sim
   src/main.cpp
   src/config.cpp
+  src/order.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -29,3 +30,11 @@ if(ENABLE_TSAN)
   target_compile_options(delivery_sim PRIVATE -fsanitize=thread -g)
   target_link_libraries(delivery_sim PRIVATE -fsanitize=thread)
 endif()
+
+# Pruebas unitarias: se construyen con `make` y se ejecutan con `ctest`.
+enable_testing()
+
+add_executable(order_test tests/order_test.cpp src/order.cpp)
+target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(order_test PRIVATE -Wall -Wextra)
+add_test(NAME order_test COMMAND order_test)

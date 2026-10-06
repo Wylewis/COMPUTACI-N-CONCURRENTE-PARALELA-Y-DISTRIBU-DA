@@ -22,6 +22,12 @@ Con ThreadSanitizer:
 cmake -DENABLE_TSAN=ON .. && make
 ```
 
+Pruebas unitarias (se construyen con `make` dentro de `build/`):
+
+```sh
+ctest --output-on-failure
+```
+
 ## Dependencias
 
 - cmake ≥ 3.11

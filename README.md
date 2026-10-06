@@ -25,28 +25,33 @@ cmake -DENABLE_TSAN=ON .. && make
 
 ## Mapa
 
-La imagen de fondo `data/equipetrol.png` cubre el cuadrante noroeste de Santa Cruz de la
-Sierra, desde el Segundo Anillo (Av. Cristóbal de Mendoza) hasta el Cuarto Anillo, con el
-Tercer Anillo interno y externo y la Av. San Martín completa. Tamaño: 1771 × 1859 píxeles,
-zoom 16 de OpenStreetMap.
+La zona de trabajo de la simulación es la franja de Equipetrol a lo largo de la Av. San
+Martín, desde el Segundo Anillo (Av. Cristóbal de Mendoza) hasta el Cuarto Anillo (Av.
+Antonio Vaca Díez), cruzada por el Tercer Anillo (Av. Noel Kempff Mercado) y limitada al
+este por la Av. La Salle. Está definida por un polígono de 58 vértices en `data/equipetrol_zone.json`.
 
-Bounding box geográfico de la imagen (grados decimales, también en `data/equipetrol_bounds.json`):
+La imagen de fondo `data/equipetrol.png` es el recorte de OpenStreetMap a ese polígono:
+todo lo que queda fuera de la zona está pintado de blanco. Tamaño: 712 × 991 píxeles,
+zoom 16.
 
-| Lado  | Valor    |
-|-------|----------|
-| north | -17.746  |
-| south | -17.784  |
-| west  | -63.218  |
-| east  | -63.180  |
+Bounding box geográfico de la imagen, igual al del polígono (grados decimales, también en
+`data/equipetrol_bounds.json`):
+
+| Lado  | Valor       |
+|-------|-------------|
+| north | -17.752704  |
+| south | -17.772971  |
+| west  | -63.203708  |
+| east  | -63.188420  |
 
 La imagen se genera con `tools/make_map.py`, que solo necesita Python 3 (sin librerías
-externas): descarga los tiles de OpenStreetMap que cubren el bounding box, los une y recorta
-el resultado exactamente a esos límites, de modo que cualquier latitud y longitud dentro de
-la zona se convierte a píxel con una interpolación lineal sobre los cuatro valores de arriba.
+externas): descarga los tiles de OpenStreetMap que cubren el bounding box del polígono, los
+une, recorta el resultado exactamente a esos límites y pinta de blanco el exterior del
+polígono. Cualquier latitud y longitud dentro de la zona se convierte a píxel con una
+interpolación lineal sobre los cuatro valores de arriba.
 
 ```sh
-python3 tools/make_map.py --north -17.746 --south -17.784 --west -63.218 --east -63.180 \
-    --zoom 16 --out data/equipetrol.png
+python3 tools/make_map.py --zone data/equipetrol_zone.json --zoom 16 --out data/equipetrol.png
 ```
 
 ## Atribución del mapa

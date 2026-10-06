@@ -5,10 +5,18 @@ Uso:
     python3 tools/make_map.py --north -17.745 --south -17.776 \
         --west -63.215 --east -63.184 --zoom 16 --out data/equipetrol.png
 
+    python3 tools/make_map.py --zone data/equipetrol_zone.json --zoom 16 \
+        --out data/equipetrol.png
+
 Descarga los tiles que cubren el bounding box, los une y recorta la imagen
 exactamente al bounding box pedido, de modo que los limites de la imagen
 coinciden con los valores --north/--south/--west/--east. Esos cuatro valores
 son los que van en map.bounds del archivo de configuracion.
+
+Con --zone se lee un poligono de vertices [lat, lon]: el bounding box se toma
+del poligono (salvo que se pasen los cuatro limites a mano) y todo lo que queda
+fuera del poligono se pinta de blanco. Asi la zona de trabajo es exactamente
+la dibujada.
 
 Solo usa la libreria estandar de Python (sin Pillow ni requests): el PNG se
 decodifica y se codifica a mano.
@@ -18,6 +26,7 @@ Politica de uso de tiles: https://operations.osmfoundation.org/policies/tiles/
 """
 
 import argparse
+import json
 import math
 import os
 import struct
@@ -173,20 +182,68 @@ def fetch_tile(z, x, y, cache_dir):
 
 
 # ---------------------------------------------------------------------------
+# Recorte por poligono
+# ---------------------------------------------------------------------------
+
+def apply_zone_mask(rows, width, height, polygon_px, fill=(255, 255, 255)):
+    """Pinta con `fill` todo pixel cuyo centro queda fuera del poligono.
+
+    polygon_px: lista de vertices (x, y) en pixeles de la imagen recortada.
+    Relleno por barrido de lineas (scanline): para cada fila se calculan las
+    intersecciones con las aristas y se conserva lo que queda entre pares.
+    """
+    n = len(polygon_px)
+    fill_row = bytearray(fill) * width
+    for y in range(height):
+        cy = y + 0.5
+        xs = []
+        for i in range(n):
+            (x1, y1), (x2, y2) = polygon_px[i], polygon_px[(i + 1) % n]
+            if (y1 <= cy < y2) or (y2 <= cy < y1):
+                xs.append(x1 + (cy - y1) * (x2 - x1) / (y2 - y1))
+        xs.sort()
+        new = bytearray(fill_row)
+        for j in range(0, len(xs) - 1, 2):
+            a = max(0, int(math.ceil(xs[j] - 0.5)))
+            b = min(width, int(math.floor(xs[j + 1] + 0.5)))
+            if b > a:
+                new[3 * a:3 * b] = rows[y][3 * a:3 * b]
+        rows[y] = new
+
+
+# ---------------------------------------------------------------------------
 # Programa principal
 # ---------------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--north", type=float, required=True)
-    ap.add_argument("--south", type=float, required=True)
-    ap.add_argument("--west", type=float, required=True)
-    ap.add_argument("--east", type=float, required=True)
+    ap.add_argument("--north", type=float)
+    ap.add_argument("--south", type=float)
+    ap.add_argument("--west", type=float)
+    ap.add_argument("--east", type=float)
+    ap.add_argument("--zone", help="JSON con 'polygon': [[lat, lon], ...]")
     ap.add_argument("--zoom", type=int, default=16)
     ap.add_argument("--out", default="data/equipetrol.png")
     ap.add_argument("--cache", default="tools/tile_cache")
     args = ap.parse_args()
 
+    polygon = None
+    if args.zone:
+        with open(args.zone) as f:
+            polygon = json.load(f)["polygon"]
+        lats = [p[0] for p in polygon]
+        lons = [p[1] for p in polygon]
+        if args.north is None:
+            args.north = max(lats)
+        if args.south is None:
+            args.south = min(lats)
+        if args.west is None:
+            args.west = min(lons)
+        if args.east is None:
+            args.east = max(lons)
+
+    if None in (args.north, args.south, args.west, args.east):
+        sys.exit("faltan limites: pasar --north/--south/--west/--east o --zone")
     if not (args.south < args.north and args.west < args.east):
         sys.exit("bounding box invalido: se requiere south < north y west < east")
 
@@ -218,6 +275,15 @@ def main():
     py1 = int(round((y1f - ty0) * TILE_SIZE))
     out_w, out_h = px1 - px0, py1 - py0
     cropped = [mosaic[y][px0 * 3:px1 * 3] for y in range(py0, py1)]
+
+    if polygon:
+        # Vertices del poligono en pixeles de la imagen recortada
+        polygon_px = []
+        for lat, lon in polygon:
+            fx, fy = lonlat_to_tile_xy(lon, lat, z)
+            polygon_px.append(((fx - tx0) * TILE_SIZE - px0, (fy - ty0) * TILE_SIZE - py0))
+        apply_zone_mask(cropped, out_w, out_h, polygon_px)
+        print(f"zona: {len(polygon)} vertices, exterior pintado de blanco", file=sys.stderr)
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "wb") as f:

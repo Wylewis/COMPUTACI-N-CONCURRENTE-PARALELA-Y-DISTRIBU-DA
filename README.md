@@ -12,9 +12,23 @@ cmake .. && make
 ```
 
 El único flag opcional es `--log <ruta>`, que cambia el archivo del log de eventos (por defecto `events.log`).
-Si falta el argumento, el archivo no se puede leer, el JSON está mal formado o falta una propiedad
-obligatoria, el programa imprime el motivo en stderr y sale con estado distinto de cero sin simular.
-Un archivo de configuración mínimo y válido está en `tests/config/minimal.json`.
+
+### Validación del archivo de configuración
+
+El programa rechaza el archivo, con un mensaje en stderr y estado de salida distinto de cero y sin
+iniciar ninguna simulación, cuando:
+
+- falta el argumento, el archivo no se puede leer o el JSON está mal formado;
+- falta una propiedad obligatoria o tiene un tipo inválido;
+- `nodes` está vacío, o una calle, un restaurante o `fleet.startNode` apunta a un nodo que no existe;
+- un valor sale del rango que declara la tabla de la sección 5: `fleet.couriers`, `fleet.bagCapacity`,
+  `orders.burstMax` y `pickupSlots` deben ser ≥ 1, y `breakdownProbability` estar entre 0 y 1;
+- `prepTimeMs` no es un array `[min, max]`;
+- la imagen `map.image` no se puede leer.
+
+No se comprueba nada más, para no rechazar archivos válidos que sigan el formato del enunciado.
+Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
+`tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
 Con ThreadSanitizer:
 

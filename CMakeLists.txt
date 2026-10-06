@@ -15,6 +15,10 @@ find_package(Threads REQUIRED)
 
 add_executable(delivery_sim src/main.cpp)
 
+# nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
+# para que sus cabeceras no generen warnings bajo -Wall -Wextra.
+target_include_directories(delivery_sim SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+
 target_compile_options(delivery_sim PRIVATE -Wall -Wextra)
 target_link_libraries(delivery_sim PRIVATE Threads::Threads)
 

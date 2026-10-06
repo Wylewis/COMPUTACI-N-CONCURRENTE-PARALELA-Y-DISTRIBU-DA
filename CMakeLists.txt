@@ -38,3 +38,8 @@ add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(order_test PRIVATE -Wall -Wextra)
 add_test(NAME order_test COMMAND order_test)
+
+# Carga y validacion del config: cada archivo de tests/invalid/ debe rechazarse
+# con estado distinto de cero y un mensaje; tests/config/minimal.json debe cargar.
+add_test(NAME config_tests
+         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_config_tests.sh $<TARGET_FILE:delivery_sim>)

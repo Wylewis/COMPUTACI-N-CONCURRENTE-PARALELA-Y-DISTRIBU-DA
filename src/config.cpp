@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <string>
+#include <unordered_set>
 
 #include "nlohmann/json.hpp"
 
@@ -194,4 +195,60 @@ Config loadConfig(const std::string& path) {
     }
 
     return cfg;
+}
+
+void validateConfig(const Config& cfg) {
+    if (cfg.nodes.empty()) {
+        throw ConfigError("'nodes' debe tener al menos un nodo");
+    }
+
+    std::unordered_set<std::string> nodeIds;
+    for (const auto& n : cfg.nodes) nodeIds.insert(n.id);
+
+    for (std::size_t i = 0; i < cfg.streets.size(); ++i) {
+        const auto& s = cfg.streets[i];
+        if (!nodeIds.count(s.from)) {
+            throw ConfigError("la calle '" + s.id + "' (streets[" + std::to_string(i) +
+                              "]) hace referencia al nodo inexistente '" + s.from + "'");
+        }
+        if (!nodeIds.count(s.to)) {
+            throw ConfigError("la calle '" + s.id + "' (streets[" + std::to_string(i) +
+                              "]) hace referencia al nodo inexistente '" + s.to + "'");
+        }
+    }
+
+    for (std::size_t i = 0; i < cfg.restaurants.size(); ++i) {
+        const auto& r = cfg.restaurants[i];
+        if (!nodeIds.count(r.node)) {
+            throw ConfigError("el restaurante '" + r.id + "' (restaurants[" + std::to_string(i) +
+                              "]) hace referencia al nodo inexistente '" + r.node + "'");
+        }
+        if (r.pickupSlots < 1) {
+            throw ConfigError("el restaurante '" + r.id + "' tiene pickupSlots = " +
+                              std::to_string(r.pickupSlots) + "; debe ser un entero >= 1");
+        }
+    }
+
+    if (!nodeIds.count(cfg.fleet.startNode)) {
+        throw ConfigError("'fleet.startNode' hace referencia al nodo inexistente '" +
+                          cfg.fleet.startNode + "'");
+    }
+    if (cfg.fleet.couriers < 1) {
+        throw ConfigError("'fleet.couriers' debe ser un entero >= 1");
+    }
+    if (cfg.fleet.bagCapacity < 1) {
+        throw ConfigError("'fleet.bagCapacity' debe ser un entero >= 1");
+    }
+    if (cfg.orders.burstMax < 1) {
+        throw ConfigError("'orders.burstMax' debe ser un entero >= 1");
+    }
+    const double p = cfg.incidents.breakdownProbability;
+    if (!(p >= 0.0 && p <= 1.0)) {
+        throw ConfigError("'incidents.breakdownProbability' debe estar entre 0 y 1");
+    }
+
+    std::ifstream image(cfg.imagePath(), std::ios::binary);
+    if (!image) {
+        throw ConfigError("no se puede leer la imagen del mapa 'map.image': " + cfg.imagePath());
+    }
 }

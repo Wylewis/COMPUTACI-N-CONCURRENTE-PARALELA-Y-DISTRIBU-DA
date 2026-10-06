@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
     Config config;
     try {
         config = loadConfig(opts.configPath);
+        validateConfig(config);
     } catch (const ConfigError& e) {
         std::cerr << "delivery_sim: configuracion invalida: " << e.what() << "\n";
         return 1;

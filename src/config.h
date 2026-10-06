@@ -95,3 +95,10 @@ struct Config {
 // no se puede leer, el JSON esta mal formado, falta una propiedad obligatoria o
 // una propiedad tiene un tipo invalido. No valida referencias entre entidades.
 Config loadConfig(const std::string& path);
+
+// Comprueba lo que la seccion 5 del enunciado exige de un archivo valido:
+// al menos un nodo; calles, restaurantes y startNode que apuntan a nodos
+// existentes; los rangos que declara la tabla (couriers, bagCapacity, burstMax
+// y pickupSlots >= 1, breakdownProbability entre 0 y 1); y que la imagen del
+// mapa se pueda leer. Lanza ConfigError con el motivo.
+void validateConfig(const Config& cfg);

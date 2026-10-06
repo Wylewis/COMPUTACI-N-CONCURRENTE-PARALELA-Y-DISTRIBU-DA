@@ -13,7 +13,10 @@ option(ENABLE_TSAN "Instrumentar delivery_sim con ThreadSanitizer" OFF)
 
 find_package(Threads REQUIRED)
 
-add_executable(delivery_sim src/main.cpp)
+add_executable(delivery_sim
+  src/main.cpp
+  src/config.cpp
+)
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
 # para que sus cabeceras no generen warnings bajo -Wall -Wextra.

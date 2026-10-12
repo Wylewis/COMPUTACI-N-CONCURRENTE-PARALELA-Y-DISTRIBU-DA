@@ -95,6 +95,32 @@ interpolación lineal sobre los cuatro valores de arriba.
 python3 tools/make_map.py --zone data/equipetrol_zone.json --zoom 16 --out data/equipetrol.png
 ```
 
+## Red de calles
+
+`tools/extract_network.py` construye la red de calles de la zona a partir de OpenStreetMap,
+también con solo Python 3:
+
+```sh
+python3 tools/extract_network.py --zone data/equipetrol_zone.json --out data/equipetrol_network.json
+```
+
+Descarga de la API de OpenStreetMap todos los elementos del rectángulo envolvente de la zona
+(la respuesta se guarda en `tools/osm_cache/` para repetir la extracción sin red), conserva las
+vías transitables en moto cuyos nodos caen dentro del polígono, y produce en
+`data/equipetrol_network.json`:
+
+- `nodes`: las intersecciones y, en calles curvas, los quiebres donde el trazado se aparta más
+  de 12 m de la recta (`--tolerance`), para que una moto dibujada entre dos nodos nunca cruce
+  una manzana;
+- `streets`: un segmento por cada par de nodos consecutivos, con `oneWay` según la etiqueta
+  `oneway` de OpenStreetMap; las rotondas son siempre de un solo sentido;
+- `restaurantCandidates`: los restaurantes reales de la zona con su nodo más cercano, de donde
+  se eligen los del archivo de configuración.
+
+Solo se conserva la componente conexa más grande. Con `--prune-unreachable` se conservan además
+solo los nodos con ida y vuelta respetando sentidos, descartando los callejones de un solo sentido
+cortados por el borde de la zona.
+
 ## Atribución del mapa
 
 Los datos y la imagen del mapa provienen de OpenStreetMap, publicados bajo la licencia ODbL.

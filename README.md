@@ -30,6 +30,21 @@ No se comprueba nada más, para no rechazar archivos válidos que sigan el forma
 Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
 `tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
+### Log de eventos y resumen
+
+El log (`events.log` o la ruta de `--log`) lleva un objeto JSON por línea, con `t` en milisegundos
+simulados y solo los campos que corresponden a cada evento, por ejemplo:
+
+```json
+{"t":15230,"event":"orderCreated","order":"o17","restaurant":"r3"}
+{"t":15410,"event":"orderAssigned","order":"o17","courier":"c5"}
+{"t":322900,"event":"orderRejected","order":"o21","reason":"unreachable"}
+```
+
+Los contadores del resumen final se actualizan al escribir cada línea, así que el resumen coincide
+con el log por construcción: `created = delivered + rejected + pending`, y `avgDeliveryMs` y
+`maxDeliveryMs` se miden desde `orderCreated` hasta `orderDelivered`.
+
 Con ThreadSanitizer:
 
 ```sh

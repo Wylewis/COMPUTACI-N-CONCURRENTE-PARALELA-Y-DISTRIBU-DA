@@ -18,6 +18,7 @@ add_executable(delivery_sim
   src/config.cpp
   src/order.cpp
   src/sim_clock.cpp
+  src/event_log.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -44,6 +45,12 @@ add_executable(sim_clock_test tests/sim_clock_test.cpp src/sim_clock.cpp)
 target_include_directories(sim_clock_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(sim_clock_test PRIVATE -Wall -Wextra)
 add_test(NAME sim_clock_test COMMAND sim_clock_test)
+
+add_executable(event_log_test tests/event_log_test.cpp src/event_log.cpp src/order.cpp)
+target_include_directories(event_log_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(event_log_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(event_log_test PRIVATE -Wall -Wextra)
+add_test(NAME event_log_test COMMAND event_log_test)
 
 # Carga y validacion del config: cada archivo de tests/invalid/ debe rechazarse
 # con estado distinto de cero y un mensaje; tests/config/minimal.json debe cargar.

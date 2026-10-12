@@ -2,6 +2,7 @@
 #include <string>
 
 #include "config.h"
+#include "graph.h"
 
 namespace {
 
@@ -58,10 +59,16 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const Graph graph(config);
+    const auto reachableFromStart = graph.reachableFrom(config.fleet.startNode).size();
+
     std::cerr << "delivery_sim: configuracion cargada: " << config.nodes.size() << " nodos, "
               << config.streets.size() << " calles, " << config.restaurants.size() << " restaurantes, "
               << config.fleet.couriers << " repartidores; mapa " << config.imagePath()
               << "; log " << opts.logPath << "\n";
+    std::cerr << "delivery_sim: red de calles: " << graph.edgeCount() << " aristas dirigidas, "
+              << reachableFromStart << " de " << graph.nodeCount()
+              << " nodos alcanzables desde " << config.fleet.startNode << "\n";
     std::cerr << "delivery_sim: la simulacion todavia no esta implementada\n";
     return 1;
 }

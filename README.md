@@ -137,6 +137,15 @@ Bali Parrilla Bar, Botánica, Puerto Milanesa, Slatkis, Tony Roma's, Pícolo y R
 parte del nodo de la avenida más cercano a su punto medio. Los demás valores (flota, pedidos,
 despacho, incidentes y simulación) son los del ejemplo de la sección 5 del enunciado.
 
+### Rutas
+
+El módulo `graph` convierte nodos y calles en un grafo dirigido: una calle de doble sentido
+aporta dos aristas y una de sentido único, una. El peso de cada arista es la distancia geodésica
+entre sus nodos. Las rutas se calculan con Dijkstra respetando los sentidos, y un punto de
+entrega es `unreachable` cuando no existe camino dirigido desde el restaurante hasta él. Con el
+config de Equipetrol, desde el punto de partida de la flota se alcanzan 310 de los 320 nodos; los
+10 restantes son callejones de un solo sentido cortados por el borde de la zona.
+
 ## Atribución del mapa
 
 Los datos y la imagen del mapa provienen de OpenStreetMap, publicados bajo la licencia ODbL.

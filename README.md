@@ -121,6 +121,22 @@ Solo se conserva la componente conexa más grande. Con `--prune-unreachable` se 
 solo los nodos con ida y vuelta respetando sentidos, descartando los callejones de un solo sentido
 cortados por el borde de la zona.
 
+## Modelo de la ciudad
+
+`config/equipetrol.json` es el archivo de configuración principal. Lo genera `tools/make_config.py`
+a partir de la red extraída y de los límites del mapa:
+
+```sh
+python3 tools/make_config.py
+```
+
+Contiene los 320 nodos y 472 segmentos de `data/equipetrol_network.json`, y nueve restaurantes
+reales de la Av. San Martín, tomados de OpenStreetMap y ubicados en el nodo más cercano de la
+avenida, repartidos desde el Cuarto Anillo hasta el Segundo: Pizza Hut, Jardín de Asia,
+Bali Parrilla Bar, Botánica, Puerto Milanesa, Slatkis, Tony Roma's, Pícolo y RestoBar. La flota
+parte del nodo de la avenida más cercano a su punto medio. Los demás valores (flota, pedidos,
+despacho, incidentes y simulación) son los del ejemplo de la sección 5 del enunciado.
+
 ## Atribución del mapa
 
 Los datos y la imagen del mapa provienen de OpenStreetMap, publicados bajo la licencia ODbL.

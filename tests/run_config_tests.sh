@@ -33,14 +33,15 @@ for f in "$here"/invalid/*.json; do
     fi
 done
 
-valid="$here/config/minimal.json"
-err=$("$bin" "$valid" 2>&1 >/dev/null)
-if printf '%s' "$err" | grep -q "configuracion cargada"; then
-    echo "ok     $(basename "$valid") -> cargado"
-else
-    echo "FALLO  $(basename "$valid"): no se cargo: $(printf '%s' "$err" | head -n 1)"
-    failures=$((failures + 1))
-fi
+for valid in "$here/config/minimal.json" "$here/../config/equipetrol.json"; do
+    err=$("$bin" "$valid" 2>&1 >/dev/null)
+    if printf '%s' "$err" | grep -q "configuracion cargada"; then
+        echo "ok     $(basename "$valid") -> cargado"
+    else
+        echo "FALLO  $(basename "$valid"): no se cargo: $(printf '%s' "$err" | head -n 1)"
+        failures=$((failures + 1))
+    fi
+done
 
 if [ "$failures" -eq 0 ]; then
     echo "config_tests: todas las pruebas pasaron"

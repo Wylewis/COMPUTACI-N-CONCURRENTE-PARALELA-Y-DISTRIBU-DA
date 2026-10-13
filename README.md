@@ -30,6 +30,14 @@ No se comprueba nada más, para no rechazar archivos válidos que sigan el forma
 Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
 `tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
+### Movimiento de las motos
+
+El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir
+de un instante simulado de salida. Con eso, la posición en cualquier instante se calcula
+(`positionAt`) sin que el repartidor tenga que actualizarla cuadro a cuadro: la ventana consulta
+el viaje y dibuja el punto avanzando suave por la calle. También da la duración de cada tramo, que
+es lo que el repartidor espera entre nodo y nodo.
+
 ### Generación de pedidos
 
 El módulo `order_generator` produce la secuencia de pedidos a partir de `orders.seed`, con un

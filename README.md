@@ -30,6 +30,16 @@ No se comprueba nada más, para no rechazar archivos válidos que sigan el forma
 Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
 `tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
+### Generación de pedidos
+
+El módulo `order_generator` produce la secuencia de pedidos a partir de `orders.seed`, con un
+único generador aleatorio y un orden fijo de sorteos, así la misma semilla da exactamente la misma
+secuencia. Las llegadas siguen intervalos exponenciales con media `meanIntervalMs`; una de cada
+cinco llegadas es una ráfaga de 2 a `burstMax` pedidos en el mismo instante. Cada pedido recibe
+un restaurante y un nodo de entrega al azar, y su hora de preparación lista dentro de `prepTimeMs`.
+Si no existe camino dirigido del restaurante a la entrega, el pedido nace rechazado con
+`unreachable`. Con el config de Equipetrol, cerca del 3 % de los pedidos son `unreachable`.
+
 ### Log de eventos y resumen
 
 El log (`events.log` o la ruta de `--log`) lleva un objeto JSON por línea, con `t` en milisegundos

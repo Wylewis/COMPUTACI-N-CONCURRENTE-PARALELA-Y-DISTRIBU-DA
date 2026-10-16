@@ -22,6 +22,7 @@ add_executable(delivery_sim
   src/graph.cpp
   src/order_generator.cpp
   src/route_motion.cpp
+  src/estimate.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -73,6 +74,13 @@ target_include_directories(route_motion_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(route_motion_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(route_motion_test PRIVATE -Wall -Wextra)
 add_test(NAME route_motion_test COMMAND route_motion_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(estimate_test tests/estimate_test.cpp
+  src/estimate.cpp src/route_motion.cpp src/order.cpp src/graph.cpp src/config.cpp)
+target_include_directories(estimate_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(estimate_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(estimate_test PRIVATE -Wall -Wextra)
+add_test(NAME estimate_test COMMAND estimate_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 # Carga y validacion del config: cada archivo de tests/invalid/ debe rechazarse
 # con estado distinto de cero y un mensaje; tests/config/minimal.json debe cargar.

@@ -30,6 +30,14 @@ No se comprueba nada más, para no rechazar archivos válidos que sigan el forma
 Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
 `tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
+### Tabla de distancias
+
+El módulo `distance_table` calcula una vez, al arrancar, la distancia más corta desde cada
+restaurante hasta todos los nodos (un Dijkstra uno-a-todos por restaurante). Después cada consulta
+es una lectura. La función `computeRow` es la unidad de trabajo: una fila por origen, lo que
+permite construir la tabla en paralelo repartiendo los orígenes entre tareas. La tabla es inmutable
+y se consulta desde cualquier hilo sin cerrojo.
+
 ### Movimiento de las motos
 
 El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir

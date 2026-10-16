@@ -38,6 +38,15 @@ de un instante simulado de salida. Con eso, la posición en cualquier instante s
 el viaje y dibuja el punto avanzando suave por la calle. También da la duración de cada tramo, que
 es lo que el repartidor espera entre nodo y nodo.
 
+### Estimación de entrega
+
+El módulo `estimate` calcula, como función pura, cuándo entregaría un repartidor un pedido si lo
+tomara ahora: trayecto hasta el restaurante desde el nodo donde quedará libre, espera hasta que el
+pedido esté preparado, recogida (60 s simulados), trayecto hasta el cliente y entrega en la puerta
+(60 s simulados). Recibe una copia de los datos del repartidor, así la tarea que estima no comparte
+nada con el hilo de la moto. Si la mochila está llena o no hay ruta, lanza `EstimateError`: ese es
+el error que el despachador recibe de una estimación fallida y sobrevive.
+
 ### Generación de pedidos
 
 El módulo `order_generator` produce la secuencia de pedidos a partir de `orders.seed`, con un

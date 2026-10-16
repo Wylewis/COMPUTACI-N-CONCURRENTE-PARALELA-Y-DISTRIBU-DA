@@ -23,6 +23,7 @@ add_executable(delivery_sim
   src/order_generator.cpp
   src/route_motion.cpp
   src/estimate.cpp
+  src/distance_table.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -81,6 +82,12 @@ target_include_directories(estimate_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(estimate_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(estimate_test PRIVATE -Wall -Wextra)
 add_test(NAME estimate_test COMMAND estimate_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(distance_table_test tests/distance_table_test.cpp src/distance_table.cpp src/graph.cpp src/config.cpp)
+target_include_directories(distance_table_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(distance_table_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(distance_table_test PRIVATE -Wall -Wextra)
+add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 # Carga y validacion del config: cada archivo de tests/invalid/ debe rechazarse
 # con estado distinto de cero y un mensaje; tests/config/minimal.json debe cargar.

@@ -55,6 +55,12 @@ public:
     const Node& node(const std::string& id) const;
     const std::vector<Edge>& edgesFrom(const std::string& id) const;
 
+    // Acceso por indice (0 .. nodeCount()-1), para tablas que guardan una
+    // entrada por nodo. Lanza std::out_of_range si el id no existe.
+    std::size_t nodeIndex(const std::string& id) const { return indexOf(id); }
+    const Node& nodeAt(std::size_t index) const { return nodes_.at(index); }
+    const std::vector<Edge>& edgesAt(std::size_t index) const { return adjacency_.at(index); }
+
     // Ruta mas corta respetando sentidos (Dijkstra). std::nullopt si no existe.
     // Lanza std::out_of_range si alguno de los ids no existe.
     std::optional<Route> shortestPath(const std::string& from, const std::string& to) const;

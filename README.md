@@ -104,11 +104,16 @@ ninguna mochila supere `bagCapacity` ni ningún restaurante tenga más repartido
 `pickupSlots`; que no se creen pedidos después de `simulationStopping`; y con `--summary`, que
 cada contador del resumen sea igual a las líneas del log. Sale con 0 si no hay errores.
 
-Con ThreadSanitizer:
+Con ThreadSanitizer (carreras de datos) o con AddressSanitizer (errores y fugas de memoria). Las
+dos opciones instrumentan `delivery_sim` y todas las pruebas, y no pueden combinarse:
 
 ```sh
 cmake -DENABLE_TSAN=ON .. && make
+cmake -DENABLE_ASAN=ON .. && make
 ```
+
+LeakSanitizer viene incluido con AddressSanitizer en Linux; en macOS con Apple Silicon no está
+disponible, así que la detección de fugas se hace en Linux.
 
 Pruebas unitarias (se construyen con `make` dentro de `build/`):
 

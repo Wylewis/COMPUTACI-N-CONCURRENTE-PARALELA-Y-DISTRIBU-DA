@@ -10,6 +10,23 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(ENABLE_TSAN "Instrumentar delivery_sim con ThreadSanitizer" OFF)
+option(ENABLE_ASAN "Instrumentar delivery_sim con AddressSanitizer (y LeakSanitizer donde exista)" OFF)
+
+if(ENABLE_TSAN AND ENABLE_ASAN)
+  message(FATAL_ERROR "ENABLE_TSAN y ENABLE_ASAN no pueden combinarse: los sanitizers de hilos y de memoria son incompatibles entre si")
+endif()
+
+# Aplica el sanitizer elegido a un target. Se usa para delivery_sim y para
+# cada prueba, asi `ctest` corre instrumentado con la misma opcion.
+function(apply_sanitizers target)
+  if(ENABLE_TSAN)
+    target_compile_options(${target} PRIVATE -fsanitize=thread -g)
+    target_link_libraries(${target} PRIVATE -fsanitize=thread)
+  elseif(ENABLE_ASAN)
+    target_compile_options(${target} PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    target_link_libraries(${target} PRIVATE -fsanitize=address)
+  endif()
+endfunction()
 
 find_package(Threads REQUIRED)
 
@@ -33,11 +50,7 @@ target_include_directories(delivery_sim SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third
 
 target_compile_options(delivery_sim PRIVATE -Wall -Wextra)
 target_link_libraries(delivery_sim PRIVATE Threads::Threads)
-
-if(ENABLE_TSAN)
-  target_compile_options(delivery_sim PRIVATE -fsanitize=thread -g)
-  target_link_libraries(delivery_sim PRIVATE -fsanitize=thread)
-endif()
+apply_sanitizers(delivery_sim)
 
 # Pruebas unitarias: se construyen con `make` y se ejecutan con `ctest`.
 enable_testing()
@@ -45,23 +58,27 @@ enable_testing()
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(order_test PRIVATE -Wall -Wextra)
+apply_sanitizers(order_test)
 add_test(NAME order_test COMMAND order_test)
 
 add_executable(sim_clock_test tests/sim_clock_test.cpp src/sim_clock.cpp)
 target_include_directories(sim_clock_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(sim_clock_test PRIVATE -Wall -Wextra)
+apply_sanitizers(sim_clock_test)
 add_test(NAME sim_clock_test COMMAND sim_clock_test)
 
 add_executable(event_log_test tests/event_log_test.cpp src/event_log.cpp src/order.cpp)
 target_include_directories(event_log_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(event_log_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(event_log_test PRIVATE -Wall -Wextra)
+apply_sanitizers(event_log_test)
 add_test(NAME event_log_test COMMAND event_log_test)
 
 add_executable(graph_test tests/graph_test.cpp src/graph.cpp src/config.cpp)
 target_include_directories(graph_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(graph_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(graph_test PRIVATE -Wall -Wextra)
+apply_sanitizers(graph_test)
 add_test(NAME graph_test COMMAND graph_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(order_generator_test tests/order_generator_test.cpp
@@ -69,12 +86,14 @@ add_executable(order_generator_test tests/order_generator_test.cpp
 target_include_directories(order_generator_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(order_generator_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(order_generator_test PRIVATE -Wall -Wextra)
+apply_sanitizers(order_generator_test)
 add_test(NAME order_generator_test COMMAND order_generator_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(route_motion_test tests/route_motion_test.cpp src/route_motion.cpp src/graph.cpp src/config.cpp)
 target_include_directories(route_motion_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(route_motion_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(route_motion_test PRIVATE -Wall -Wextra)
+apply_sanitizers(route_motion_test)
 add_test(NAME route_motion_test COMMAND route_motion_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(estimate_test tests/estimate_test.cpp
@@ -82,18 +101,21 @@ add_executable(estimate_test tests/estimate_test.cpp
 target_include_directories(estimate_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(estimate_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(estimate_test PRIVATE -Wall -Wextra)
+apply_sanitizers(estimate_test)
 add_test(NAME estimate_test COMMAND estimate_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(distance_table_test tests/distance_table_test.cpp src/distance_table.cpp src/graph.cpp src/config.cpp)
 target_include_directories(distance_table_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(distance_table_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(distance_table_test PRIVATE -Wall -Wextra)
+apply_sanitizers(distance_table_test)
 add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(map_projection_test tests/map_projection_test.cpp src/map_projection.cpp src/graph.cpp src/config.cpp)
 target_include_directories(map_projection_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(map_projection_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(map_projection_test PRIVATE -Wall -Wextra)
+apply_sanitizers(map_projection_test)
 add_test(NAME map_projection_test COMMAND map_projection_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 # Verificador del log de eventos (Python 3, solo libreria estandar)

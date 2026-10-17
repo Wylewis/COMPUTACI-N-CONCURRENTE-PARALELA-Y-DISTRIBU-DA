@@ -1,7 +1,10 @@
 #include <iostream>
 #include <string>
 
+#include <chrono>
+
 #include "config.h"
+#include "distance_table_parallel.h"
 #include "graph.h"
 
 namespace {
@@ -69,6 +72,18 @@ int main(int argc, char** argv) {
     std::cerr << "delivery_sim: red de calles: " << graph.edgeCount() << " aristas dirigidas, "
               << reachableFromStart << " de " << graph.nodeCount()
               << " nodos alcanzables desde " << config.fleet.startNode << "\n";
+
+    // Tabla de distancias desde cada restaurante, construida en paralelo:
+    // una tarea por grupo de restaurantes, tantas como nucleos disponibles.
+    std::vector<std::string> origins;
+    for (const auto& r : config.restaurants) origins.push_back(r.node);
+    const auto t0 = std::chrono::steady_clock::now();
+    const DistanceTable distances = buildDistanceTableParallel(graph, origins);
+    const auto buildUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now() - t0).count();
+    std::cerr << "delivery_sim: tabla de distancias: " << distances.originCount() << " restaurantes x "
+              << distances.nodeCount() << " nodos en " << buildUs << " us con "
+              << defaultTaskCount(origins.size()) << " tareas\n";
     std::cerr << "delivery_sim: la simulacion todavia no esta implementada\n";
     return 1;
 }

@@ -89,6 +89,9 @@ target_include_directories(distance_table_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR
 target_compile_options(distance_table_test PRIVATE -Wall -Wextra)
 add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
+# Verificador del log de eventos (Python 3, solo libreria estandar)
+add_test(NAME check_log_test COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/check_log_test.py)
+
 # Carga y validacion del config: cada archivo de tests/invalid/ debe rechazarse
 # con estado distinto de cero y un mensaje; tests/config/minimal.json debe cargar.
 add_test(NAME config_tests

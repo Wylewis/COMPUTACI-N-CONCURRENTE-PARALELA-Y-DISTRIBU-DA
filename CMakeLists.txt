@@ -41,6 +41,7 @@ add_executable(delivery_sim
   src/route_motion.cpp
   src/estimate.cpp
   src/distance_table.cpp
+  src/distance_table_parallel.cpp
   src/map_projection.cpp
 )
 
@@ -110,6 +111,15 @@ target_include_directories(distance_table_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR
 target_compile_options(distance_table_test PRIVATE -Wall -Wextra)
 apply_sanitizers(distance_table_test)
 add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(distance_table_parallel_test tests/distance_table_parallel_test.cpp
+  src/distance_table_parallel.cpp src/distance_table.cpp src/graph.cpp src/config.cpp)
+target_include_directories(distance_table_parallel_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(distance_table_parallel_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(distance_table_parallel_test PRIVATE -Wall -Wextra)
+target_link_libraries(distance_table_parallel_test PRIVATE Threads::Threads)
+apply_sanitizers(distance_table_parallel_test)
+add_test(NAME distance_table_parallel_test COMMAND distance_table_parallel_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(map_projection_test tests/map_projection_test.cpp src/map_projection.cpp src/graph.cpp src/config.cpp)
 target_include_directories(map_projection_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

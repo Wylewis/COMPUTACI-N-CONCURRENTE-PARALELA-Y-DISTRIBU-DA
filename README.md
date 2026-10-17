@@ -45,6 +45,13 @@ es una lectura. La función `computeRow` es la unidad de trabajo: una fila por o
 permite construir la tabla en paralelo repartiendo los orígenes entre tareas. La tabla es inmutable
 y se consulta desde cualquier hilo sin cerrojo.
 
+La tabla se construye en paralelo (`distance_table_parallel`): los orígenes se reparten entre
+tantas tareas como núcleos informe `hardware_concurrency`, cada tarea lanzada con `std::async`
+calcula las filas de su grupo y las escribe en posiciones disjuntas de un vector ya dimensionado,
+sin ningún cerrojo, y al final se esperan todas las tareas. Si una tarea lanza una excepción, llega
+a quien construye la tabla a través de su future. El test compara la tabla paralela con la serial
+celda por celda y mide los tiempos de ambas.
+
 ### Movimiento de las motos
 
 El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir

@@ -80,6 +80,23 @@ Los contadores del resumen final se actualizan al escribir cada línea, así que
 con el log por construcción: `created = delivered + rejected + pending`, y `avgDeliveryMs` y
 `maxDeliveryMs` se miden desde `orderCreated` hasta `orderDelivered`.
 
+### Verificador del log
+
+`tools/check_log.py` comprueba un log y su resumen contra las reglas de las secciones 4, 6 y 7,
+como lo hará el programa de los evaluadores:
+
+```sh
+python3 tools/check_log.py events.log --summary resumen.json --config config/equipetrol.json
+```
+
+Revisa que cada línea sea un objeto JSON con exactamente las propiedades de su evento; que cada
+pedido siga `created → assigned → pickedUp → delivered` sin saltos ni retrocesos y termine en un
+solo estado final; que `t` nunca disminuya para un pedido; que cada pedido tenga un único
+repartidor a la vez y los traspasos vayan del repartidor actual a otro; con `--config`, que
+ninguna mochila supere `bagCapacity` ni ningún restaurante tenga más repartidores recogiendo que
+`pickupSlots`; que no se creen pedidos después de `simulationStopping`; y con `--summary`, que
+cada contador del resumen sea igual a las líneas del log. Sale con 0 si no hay errores.
+
 Con ThreadSanitizer:
 
 ```sh

@@ -30,6 +30,13 @@ No se comprueba nada más, para no rechazar archivos válidos que sigan el forma
 Un archivo mínimo y válido está en `tests/config/minimal.json`; los casos inválidos están en
 `tests/invalid/` y `ctest` los ejecuta con `tests/run_config_tests.sh`.
 
+### Proyección del mapa
+
+El módulo `map_projection` convierte latitud y longitud a píxeles de la imagen y viceversa con los
+límites de `map.bounds`: la esquina noroeste es el píxel (0, 0) y la sureste es (ancho, alto). Como
+la imagen se recortó exactamente a esos límites, la conversión es lineal en cada eje. Es lo que la
+ventana usa para dibujar restaurantes, motos y puntos de entrega en su posición real.
+
 ### Tabla de distancias
 
 El módulo `distance_table` calcula una vez, al arrancar, la distancia más corta desde cada

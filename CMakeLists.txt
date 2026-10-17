@@ -24,6 +24,7 @@ add_executable(delivery_sim
   src/route_motion.cpp
   src/estimate.cpp
   src/distance_table.cpp
+  src/map_projection.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -88,6 +89,12 @@ target_include_directories(distance_table_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(distance_table_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(distance_table_test PRIVATE -Wall -Wextra)
 add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(map_projection_test tests/map_projection_test.cpp src/map_projection.cpp src/graph.cpp src/config.cpp)
+target_include_directories(map_projection_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(map_projection_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(map_projection_test PRIVATE -Wall -Wextra)
+add_test(NAME map_projection_test COMMAND map_projection_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 # Verificador del log de eventos (Python 3, solo libreria estandar)
 add_test(NAME check_log_test COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/check_log_test.py)

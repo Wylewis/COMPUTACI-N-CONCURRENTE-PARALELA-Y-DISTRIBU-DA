@@ -108,6 +108,18 @@ da lo que la ventana dibuja. El viaje es un `RouteMotion` inmutable compartido c
 así la ventana calcula la posición en cualquier instante sin volver a tomar el cerrojo. Entre los
 pedidos ya recogidos, `nearestDelivery` elige el destino más cercano por calles desde el nodo actual.
 
+### Selección del repartidor
+
+El módulo `dispatch_select` decide a qué moto se le ofrece un pedido, trabajando solo sobre copias
+(`CourierSnapshot`) y sin cerrojos. Alrededor del restaurante traza anillos de radio creciente
+(300 m, 600 m, 1200 m, …, hasta cubrir a toda la flota), midiendo en línea recta hasta el nodo
+donde cada moto quedará libre. En cada anillo aplica un map (una estimación de entrega por moto con
+lugar en la mochila; las que no tienen ruta se descartan) y un reduce (la de menor hora de entrega,
+y en empate el id menor, para que el resultado sea determinista). El primer anillo con alguna
+estimación válida decide: una moto más rápida pero más lejana no se considera, que es la regla de
+los apuntes. Cada moto se estima una sola vez porque los anillos son disjuntos. El resultado trae
+el radio, los anillos recorridos y cuántas estimaciones costó, para los experimentos.
+
 ### Hilo del repartidor
 
 El módulo `courier_thread` es el hilo de cada moto. Sin pedidos duerme en su propia variable de

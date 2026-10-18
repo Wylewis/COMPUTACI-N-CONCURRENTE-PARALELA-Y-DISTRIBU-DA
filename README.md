@@ -129,6 +129,15 @@ que cada entrega incrementa: un despachador que no encontró moto duerme en `wai
 que la flota cambie o se pida parar, sin sondear. El aviso llega del hilo de la moto por un gancho
 `onFreed` que la flota instala antes de arrancar.
 
+### Hilo despachador
+
+El módulo `dispatcher_thread` es el despachador de un restaurante. Toma pedidos de su cola del libro
+(y duerme ahí si no hay), copia la flota, elige con `selectCourier` y asigna. Si nadie puede
+tomarlo, anota la versión de la flota que vio y duerme hasta que cambie: ninguna espera activa.
+Si la reserva falla porque otro despachador ganó esa moto entre la copia y la reserva, reintenta con
+copias frescas. Al pedir parar devuelve al libro el pedido que tenía en la mano, así cuenta como
+`pending`. Lleva contadores de asignaciones, reintentos y esperas para los experimentos.
+
 ### Hilo del repartidor
 
 El módulo `courier_thread` es el hilo de cada moto. Sin pedidos duerme en su propia variable de

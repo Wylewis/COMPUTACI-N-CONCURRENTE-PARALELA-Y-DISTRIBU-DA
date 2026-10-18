@@ -53,6 +53,7 @@ add_executable(delivery_sim
   src/courier_thread.cpp
   src/dispatch_select.cpp
   src/fleet.cpp
+  src/dispatcher_thread.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -154,6 +155,17 @@ target_compile_options(fleet_test PRIVATE -Wall -Wextra)
 target_link_libraries(fleet_test PRIVATE Threads::Threads)
 apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
+
+add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
+  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/courier_thread.cpp src/courier.cpp
+  src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
+  src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
+target_include_directories(dispatcher_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(dispatcher_thread_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(dispatcher_thread_test PRIVATE -Wall -Wextra)
+target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads)
+apply_sanitizers(dispatcher_thread_test)
+add_test(NAME dispatcher_thread_test COMMAND dispatcher_thread_test)
 
 add_executable(dispatch_select_test tests/dispatch_select_test.cpp
   src/dispatch_select.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp)

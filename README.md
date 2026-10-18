@@ -120,6 +120,15 @@ estimación válida decide: una moto más rápida pero más lejana no se conside
 los apuntes. Cada moto se estima una sola vez porque los anillos son disjuntos. El resultado trae
 el radio, los anillos recorridos y cuántas estimaciones costó, para los experimentos.
 
+### Flota
+
+El módulo `fleet` agrupa las motos y sus hilos: crea `couriers` repartidores `c0…cN-1` en el nodo de
+partida con la mochila de la configuración, los arranca y los une. Ofrece copias de toda la flota
+(`snapshots` para estimar, `views` para dibujar) y la asignación por id. Lleva además una versión
+que cada entrega incrementa: un despachador que no encontró moto duerme en `waitForChange` hasta
+que la flota cambie o se pida parar, sin sondear. El aviso llega del hilo de la moto por un gancho
+`onFreed` que la flota instala antes de arrancar.
+
 ### Hilo del repartidor
 
 El módulo `courier_thread` es el hilo de cada moto. Sin pedidos duerme en su propia variable de

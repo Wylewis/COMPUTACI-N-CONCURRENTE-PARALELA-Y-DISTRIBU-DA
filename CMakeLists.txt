@@ -44,6 +44,7 @@ add_executable(delivery_sim
   src/distance_table_parallel.cpp
   src/map_projection.cpp
   src/thread_pool.cpp
+  src/hardware.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -114,7 +115,7 @@ apply_sanitizers(distance_table_test)
 add_test(NAME distance_table_test COMMAND distance_table_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
 
 add_executable(distance_table_parallel_test tests/distance_table_parallel_test.cpp
-  src/distance_table_parallel.cpp src/distance_table.cpp src/graph.cpp src/config.cpp)
+  src/distance_table_parallel.cpp src/distance_table.cpp src/graph.cpp src/config.cpp src/hardware.cpp)
 target_include_directories(distance_table_parallel_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(distance_table_parallel_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(distance_table_parallel_test PRIVATE -Wall -Wextra)
@@ -128,6 +129,13 @@ target_include_directories(map_projection_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR
 target_compile_options(map_projection_test PRIVATE -Wall -Wextra)
 apply_sanitizers(map_projection_test)
 add_test(NAME map_projection_test COMMAND map_projection_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(hardware_test tests/hardware_test.cpp src/hardware.cpp)
+target_include_directories(hardware_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(hardware_test PRIVATE -Wall -Wextra)
+target_link_libraries(hardware_test PRIVATE Threads::Threads)
+apply_sanitizers(hardware_test)
+add_test(NAME hardware_test COMMAND hardware_test)
 
 add_executable(thread_pool_test tests/thread_pool_test.cpp src/thread_pool.cpp)
 target_include_directories(thread_pool_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

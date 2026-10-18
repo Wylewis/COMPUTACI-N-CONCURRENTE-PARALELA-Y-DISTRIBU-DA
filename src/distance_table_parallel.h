@@ -6,11 +6,7 @@
 
 #include "distance_table.h"
 #include "graph.h"
-
-// Cuantas tareas conviene lanzar para `work` unidades de trabajo independientes:
-// como maximo una por nucleo disponible (std::thread::hardware_concurrency) y
-// nunca mas que unidades de trabajo. Si el hardware no informa, 2.
-unsigned defaultTaskCount(std::size_t work);
+#include "hardware.h"
 
 // Construye la misma tabla que DistanceTable(graph, origins), pero repartiendo
 // los origenes entre `tasks` tareas (0 = defaultTaskCount) lanzadas con

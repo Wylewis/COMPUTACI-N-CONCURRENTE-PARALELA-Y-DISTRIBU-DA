@@ -6,6 +6,8 @@
 #include "config.h"
 #include "distance_table_parallel.h"
 #include "graph.h"
+#include "hardware.h"
+#include "thread_pool.h"
 
 namespace {
 
@@ -84,6 +86,12 @@ int main(int argc, char** argv) {
     std::cerr << "delivery_sim: tabla de distancias: " << distances.originCount() << " restaurantes x "
               << distances.nodeCount() << " nodos en " << buildUs << " us con "
               << defaultTaskCount(origins.size()) << " tareas\n";
+
+    // Pool de estimacion: un hilo por hilo de hardware, entre kPoolMinimum y
+    // kPoolMaximum. Las estimaciones de un pedido se reparten aqui.
+    ThreadPool estimators(recommendedPoolSize());
+    std::cerr << "delivery_sim: pool de estimacion: " << estimators.size() << " hilos (hardware: "
+              << hardwareThreads() << ", rango " << kPoolMinimum << "-" << kPoolMaximum << ")\n";
     std::cerr << "delivery_sim: la simulacion todavia no esta implementada\n";
     return 1;
 }

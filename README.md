@@ -93,6 +93,21 @@ pedido esté preparado, recogida (60 s simulados), trayecto hasta el cliente y e
 nada con el hilo de la moto. Si la mochila está llena o no hay ruta, lanza `EstimateError`: ese es
 el error que el despachador recibe de una estimación fallida y sobrevive.
 
+### Estado del repartidor
+
+El módulo `courier` guarda el estado de una moto: inactiva, yendo al restaurante, en fila,
+recogiendo, llevando pedidos o averiada; el nodo donde está; el viaje en curso; y la mochila. Es
+un monitor con su propio mutex, porque lo tocan varios hilos (el de la moto, los despachadores y la
+ventana) y cada moto es independiente de las demás: un cerrojo por moto deja que dos despachadores
+asignen a motos distintas a la vez. La mochila ocupa lugar desde la asignación (reserva), así dos
+despachadores no pueden asignarle entre los dos más de `bagCapacity` pedidos; comprobar si hay
+lugar y guardar el pedido es un único paso bajo el cerrojo. Un pedido entra y sale de la mochila
+por `std::move`. Lo que necesitan otros hilos sale como copia: `estimateSnapshot` da el nodo donde
+quedará libre y cuándo (el destino y la llegada del viaje en curso, o su nodo y ahora), y `view`
+da lo que la ventana dibuja. El viaje es un `RouteMotion` inmutable compartido con `shared_ptr`,
+así la ventana calcula la posición en cualquier instante sin volver a tomar el cerrojo. Entre los
+pedidos ya recogidos, `nearestDelivery` elige el destino más cercano por calles desde el nodo actual.
+
 ### Ejecución y apagado
 
 Al arrancar, `main` carga y valida el config, construye el grafo y la tabla de distancias, crea el

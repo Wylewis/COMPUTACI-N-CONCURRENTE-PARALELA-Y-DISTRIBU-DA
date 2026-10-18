@@ -49,6 +49,7 @@ add_executable(delivery_sim
   src/event_logger.cpp
   src/order_book.cpp
   src/generator_thread.cpp
+  src/courier.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -140,6 +141,15 @@ target_compile_options(hardware_test PRIVATE -Wall -Wextra)
 target_link_libraries(hardware_test PRIVATE Threads::Threads)
 apply_sanitizers(hardware_test)
 add_test(NAME hardware_test COMMAND hardware_test)
+
+add_executable(courier_test tests/courier_test.cpp
+  src/courier.cpp src/order.cpp src/route_motion.cpp src/graph.cpp src/config.cpp)
+target_include_directories(courier_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(courier_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(courier_test PRIVATE -Wall -Wextra)
+target_link_libraries(courier_test PRIVATE Threads::Threads)
+apply_sanitizers(courier_test)
+add_test(NAME courier_test COMMAND courier_test)
 
 add_executable(order_book_test tests/order_book_test.cpp src/order_book.cpp src/order.cpp)
 target_include_directories(order_book_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

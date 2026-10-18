@@ -66,6 +66,16 @@ El tamaño del pool lo decide el módulo `hardware`: un hilo por hilo de hardwar
 un núcleo o no informe) ni más de 32 (los candidatos de un pedido son pocas decenas). El programa
 registra la decisión al arrancar. El mismo módulo decide cuántas tareas usan los precálculos.
 
+### Parada y señales
+
+El módulo `stop_signal` tiene la orden de parar compartida por todos los hilos. Leerla es una
+bandera atómica; esperarla es una variable de condición, así los hilos duermen sin CPU y una sola
+llamada a `request` los despierta a todos. Toda espera de tiempo simulado (un viaje, una
+preparación) se hace con `waitUntil`, que termina al vencer el plazo o al pedirse la parada, lo que
+ocurra primero. `SignalWatcher` convierte SIGINT y SIGTERM en esa orden: el manejador de señal solo
+escribe un byte en un pipe, lo único seguro dentro de un manejador, y un hilo vigía que duerme en
+`read` sobre ese pipe pide la parada al recibirlo.
+
 ### Movimiento de las motos
 
 El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir

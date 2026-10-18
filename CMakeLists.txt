@@ -45,6 +45,7 @@ add_executable(delivery_sim
   src/map_projection.cpp
   src/thread_pool.cpp
   src/hardware.cpp
+  src/stop_signal.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -136,6 +137,13 @@ target_compile_options(hardware_test PRIVATE -Wall -Wextra)
 target_link_libraries(hardware_test PRIVATE Threads::Threads)
 apply_sanitizers(hardware_test)
 add_test(NAME hardware_test COMMAND hardware_test)
+
+add_executable(stop_signal_test tests/stop_signal_test.cpp src/stop_signal.cpp)
+target_include_directories(stop_signal_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(stop_signal_test PRIVATE -Wall -Wextra)
+target_link_libraries(stop_signal_test PRIVATE Threads::Threads)
+apply_sanitizers(stop_signal_test)
+add_test(NAME stop_signal_test COMMAND stop_signal_test)
 
 add_executable(thread_pool_test tests/thread_pool_test.cpp src/thread_pool.cpp)
 target_include_directories(thread_pool_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

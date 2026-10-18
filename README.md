@@ -120,6 +120,18 @@ estimación válida decide: una moto más rápida pero más lejana no se conside
 los apuntes. Cada moto se estima una sola vez porque los anillos son disjuntos. El resultado trae
 el radio, los anillos recorridos y cuántas estimaciones costó, para los experimentos.
 
+### Restaurante
+
+El módulo `restaurant` es el restaurante como monitor: `pickupSlots` puestos de recogida y una fila
+por orden de llegada. Un repartidor entra en la fila (`enterQueue`, que devuelve su posición),
+espera a ser el primero y a que haya un puesto libre (`waitForSlot`, dormido en la variable de
+condición del restaurante), recoge y deja el puesto (`leaveSlot`), lo que despierta al siguiente.
+La parada saca de la fila a quien esperaba. La espera de preparación del pedido es asunto del
+repartidor, fuera de la fila, para no ocupar un puesto antes de tiempo. `expectedStartMs` da la
+espera prevista de cada uno en la fila con un scan exclusivo de los tiempos de servicio repartido
+entre los puestos, y `snapshot` copia la fila para la ventana. El `scan` de `scan.h` pasa a ser
+genérico para servir tanto a posiciones como a tiempos.
+
 ### Flota
 
 El módulo `fleet` agrupa las motos y sus hilos: crea `couriers` repartidores `c0…cN-1` en el nodo de

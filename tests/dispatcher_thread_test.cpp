@@ -30,6 +30,7 @@ Config lineCity(int couriers) {
     cfg.restaurants = {{"r0", "Uno", "B", 1, 0, 0}, {"r1", "Dos", "C", 1, 0, 0}};
     cfg.fleet = {couriers, 1, 36.0, "A"};
     cfg.orders.maxPending = 10;
+    cfg.dispatch.acceptTimeoutMs = 3'600'000;
     return cfg;
 }
 
@@ -60,11 +61,13 @@ struct Rig {
     OrderBook book;
     Fleet fleet;
     std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
-    Rig(const std::string& path, int couriers, const std::vector<int>& restaurants)
+    Rig(const std::string& path, int couriers, const std::vector<int>& restaurants, std::int64_t acceptMs = 3'600'000)
         : cfg(lineCity(couriers)), graph(cfg), logger(path, Fleet::courierIds(couriers)), book(cfg),
           fleet(cfg.fleet, graph, cfg.restaurants, logger, clock, stop) {
+        cfg.dispatch.acceptTimeoutMs = acceptMs;
         for (int r : restaurants)
-            dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0, clock, stop));
+            dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0,
+                                                                      cfg.dispatch.acceptTimeoutMs, logger, clock, stop));
         clock.start();
         fleet.start();
         for (auto& d : dispatchers) d->start();
@@ -117,6 +120,23 @@ int main() {
         const auto before = steady_clock::now();
         r.shutdown();
         check(steady_clock::now() - before < milliseconds(500) && r.book.pending() == 1, "la parada devuelve el pedido al libro");
+    }
+    {   // una moto, dos pedidos y plazo de 100 s simulados: el segundo se rechaza con noCourier al vencer
+        Rig r(path, 1, {0}, 100'000);
+        r.book.submit(batch({{"n1", "r0"}, {"n2", "r0"}}, r.logger));
+        check(deliversAll(r.fleet, 1) && r.dispatchers[0]->assigned() == 1, "el primero se entrega");
+        for (int i = 0; i < 200 && r.dispatchers[0]->rejected() < 1; ++i) std::this_thread::sleep_for(milliseconds(5));
+        r.shutdown();
+        std::int64_t rejectedT = -1;
+        std::string reason;
+        std::ifstream in(path);
+        for (std::string line; std::getline(in, line);) {
+            const json j = json::parse(line);
+            if (j.contains("event") && j["event"] == "orderRejected") rejectedT = j["t"], reason = j["reason"];
+        }
+        check(r.dispatchers[0]->rejected() == 1 && reason == "noCourier" && rejectedT >= 100'000 && rejectedT < 200'000 &&
+                  r.logger.summary().rejected == 1 && r.book.pending() == 0,
+              "el segundo vence a los 100 s y se rechaza con noCourier; el resumen lo cuenta");
     }
     std::remove(path.c_str());
 

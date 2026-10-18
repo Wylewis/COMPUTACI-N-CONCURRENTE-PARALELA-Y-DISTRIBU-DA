@@ -32,7 +32,6 @@ Order assigned(const std::string& id, const std::string& delivery) {
     o.id = id;
     o.restaurantId = "r0";
     o.deliveryNode = delivery;
-    o.assignTo("c");
     return o;
 }
 
@@ -44,7 +43,8 @@ int main() {
     {   // reserva hasta la capacidad; el pedido rechazado se queda en quien lo ofrecio
         Courier c("c0", "A", 2);
         Order a = assigned("a", "C"), b = assigned("b", "B"), d = assigned("d", "C");
-        check(c.reserve(a) && c.reserve(b) && a.id.empty() && b.id.empty(), "dos reservas entran por move en una mochila de 2");
+        check(c.reserve(a) && c.reserve(b) && a.id.empty() && b.id.empty() && c.bagItems()[0].state == OrderState::Assigned,
+              "dos reservas entran por move y quedan asignadas");
         check(!c.reserve(d) && d.id == "d" && c.bagCount() == 2, "la tercera se rechaza y el pedido sigue fuera");
         const auto out = c.removeOrder("a");
         check(out && out->id == "a" && !c.hasOrder("a") && c.hasOrder("b"), "removeOrder saca el pedido por move");

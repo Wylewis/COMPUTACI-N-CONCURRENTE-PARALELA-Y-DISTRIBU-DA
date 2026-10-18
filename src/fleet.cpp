@@ -65,6 +65,12 @@ void Fleet::waitForChange(std::uint64_t seen) {
     cv_.wait(lock, [&] { return version_ != seen || stop_.requested(); });
 }
 
+bool Fleet::waitForChange(std::uint64_t seen, std::chrono::steady_clock::time_point deadline) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait_until(lock, deadline, [&] { return version_ != seen || stop_.requested(); });
+    return version_ != seen;
+}
+
 void Fleet::freed() {
     {
         std::lock_guard<std::mutex> lock(mutex_);

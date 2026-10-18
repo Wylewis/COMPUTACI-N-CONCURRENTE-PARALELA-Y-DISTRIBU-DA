@@ -43,6 +43,7 @@ add_executable(delivery_sim
   src/distance_table.cpp
   src/distance_table_parallel.cpp
   src/map_projection.cpp
+  src/thread_pool.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -127,6 +128,13 @@ target_include_directories(map_projection_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR
 target_compile_options(map_projection_test PRIVATE -Wall -Wextra)
 apply_sanitizers(map_projection_test)
 add_test(NAME map_projection_test COMMAND map_projection_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+
+add_executable(thread_pool_test tests/thread_pool_test.cpp src/thread_pool.cpp)
+target_include_directories(thread_pool_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(thread_pool_test PRIVATE -Wall -Wextra)
+target_link_libraries(thread_pool_test PRIVATE Threads::Threads)
+apply_sanitizers(thread_pool_test)
+add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
 # Verificador del log de eventos (Python 3, solo libreria estandar)
 add_test(NAME check_log_test COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/check_log_test.py)

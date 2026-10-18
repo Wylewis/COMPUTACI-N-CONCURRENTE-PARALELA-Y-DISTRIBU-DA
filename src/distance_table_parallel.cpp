@@ -2,15 +2,7 @@
 
 #include <algorithm>
 #include <future>
-#include <thread>
 #include <utility>
-
-unsigned defaultTaskCount(std::size_t work) {
-    unsigned cores = std::thread::hardware_concurrency();
-    if (cores == 0) cores = 2;  // el hardware no informa: una suposicion conservadora
-    const std::size_t limit = std::max<std::size_t>(1, work);
-    return static_cast<unsigned>(std::min<std::size_t>(cores, limit));
-}
 
 DistanceTable buildDistanceTableParallel(const Graph& graph, const std::vector<std::string>& origins,
                                          unsigned tasks) {

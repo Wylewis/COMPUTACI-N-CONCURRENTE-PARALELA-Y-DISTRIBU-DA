@@ -61,6 +61,11 @@ excepción que lanzó (`packaged_task`). El mutex cubre solo la cola; los trabaj
 cerrojo. `stop` termina lo pendiente, despierta a todos los hilos y hace `join`. Es la base de las
 estimaciones concurrentes del despachador.
 
+El tamaño del pool lo decide el módulo `hardware`: un hilo por hilo de hardware según
+`hardware_concurrency`, nunca menos de 2 (para que haya concurrencia real aunque la máquina tenga
+un núcleo o no informe) ni más de 32 (los candidatos de un pedido son pocas decenas). El programa
+registra la decisión al arrancar. El mismo módulo decide cuántas tareas usan los precálculos.
+
 ### Movimiento de las motos
 
 El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir

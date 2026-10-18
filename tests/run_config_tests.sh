@@ -33,12 +33,28 @@ for f in "$here"/invalid/*.json; do
     fi
 done
 
+# Configs validos: se ejecutan con una copia acortada a 1 segundo simulado
+# (la ruta de la imagen se vuelve absoluta para que la copia la encuentre).
+# Deben imprimir la linea de inicio y salir con estado 0.
+work=$(mktemp -d "${TMPDIR:-/tmp}/delivery_sim_cfg.XXXXXX")
+trap 'rm -rf "$work"' EXIT
 for valid in "$here/config/minimal.json" "$here/../config/equipetrol.json"; do
-    err=$("$bin" "$valid" 2>&1 >/dev/null)
-    if printf '%s' "$err" | grep -q "configuracion cargada"; then
-        echo "ok     $(basename "$valid") -> cargado"
+    name=$(basename "$valid")
+    python3 - "$valid" "$work/$name" <<'EOF'
+import json, os, sys
+src, dst = sys.argv[1], sys.argv[2]
+c = json.load(open(src))
+c["map"]["image"] = os.path.abspath(os.path.join(os.path.dirname(src), c["map"]["image"]))
+c["simulation"]["durationS"] = 1
+c["simulation"]["timeScale"] = 1000
+json.dump(c, open(dst, "w"))
+EOF
+    out=$("$bin" "$work/$name" --log "$work/$name.log" 2>"$work/$name.err")
+    status=$?
+    if [ "$status" -eq 0 ] && [ "$(printf '%s' "$out" | head -n 1)" = "Simulation has started..." ]; then
+        echo "ok     $name -> cargado y simulado 1 s"
     else
-        echo "FALLO  $(basename "$valid"): no se cargo: $(printf '%s' "$err" | head -n 1)"
+        echo "FALLO  $name: estado $status: $(head -n 1 "$work/$name.err")"
         failures=$((failures + 1))
     fi
 done

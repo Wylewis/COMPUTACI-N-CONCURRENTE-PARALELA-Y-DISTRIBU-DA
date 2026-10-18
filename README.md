@@ -93,6 +93,20 @@ pedido esté preparado, recogida (60 s simulados), trayecto hasta el cliente y e
 nada con el hilo de la moto. Si la mochila está llena o no hay ruta, lanza `EstimateError`: ese es
 el error que el despachador recibe de una estimación fallida y sobrevive.
 
+### Ejecución y apagado
+
+Al arrancar, `main` carga y valida el config, construye el grafo y la tabla de distancias, crea el
+pool de estimación, el reloj simulado, el log con su hilo escritor, el libro de pedidos y el vigía de
+señales, lanza el hilo generador e imprime `Simulation has started...`. Después duerme hasta que se
+cumpla `simulation.durationS` o llegue SIGINT o SIGTERM, lo que ocurra primero. El apagado es
+ordenado: se pide la parada, el generador termina y se une, se registra `simulationStopping`, el
+libro se cierra y lo que quedaba en espera es `pending`, el log se cierra y el resumen final se
+imprime como última línea de stdout.
+
+El hilo generador (`generator_thread`) itera sobre las ráfagas: duerme hasta el instante simulado de
+la próxima con la espera interrumpible de la señal de parada, entrega la ráfaga al libro y publica
+`orderCreated` por cada pedido y `orderRejected` por los rechazados.
+
 ### Generación de pedidos
 
 El módulo `order_generator` produce la secuencia de pedidos a partir de `orders.seed`, con un

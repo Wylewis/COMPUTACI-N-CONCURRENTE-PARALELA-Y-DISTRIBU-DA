@@ -170,6 +170,10 @@ target_link_libraries(thread_pool_test PRIVATE Threads::Threads)
 apply_sanitizers(thread_pool_test)
 add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
+# Integracion: corridas completas por tiempo cumplido, SIGINT y SIGTERM,
+# verificadas con el verificador del log.
+add_test(NAME sim_tests COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_sim_tests.sh $<TARGET_FILE:delivery_sim>)
+
 # Verificador del log de eventos (Python 3, solo libreria estandar)
 add_test(NAME check_log_test COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/check_log_test.py)
 

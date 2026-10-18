@@ -103,6 +103,18 @@ un restaurante y un nodo de entrega al azar, y su hora de preparación lista den
 Si no existe camino dirigido del restaurante a la entrega, el pedido nace rechazado con
 `unreachable`. Con el config de Equipetrol, cerca del 3 % de los pedidos son `unreachable`.
 
+### Libro de pedidos
+
+El módulo `order_book` es el único lugar donde esperan los pedidos aún no asignados. Es un monitor
+con un solo mutex, porque el límite `orders.maxPending` es global y comprobar si hay lugar e insertar
+deben ser un único paso; dentro hay una cola por restaurante con su propia variable de condición,
+así el despachador de cada restaurante duerme hasta que llega un pedido suyo. Al recibir una ráfaga,
+los pedidos que ya venían rechazados por `unreachable` pasan sin ocupar lugar, los demás entran
+mientras haya lugar y el resto se rechaza con `queueFull`. La posición de cada pedido en la cola de
+su restaurante se calcula con un scan exclusivo (`scan.h`) sobre la ráfaga: por restaurante, un
+vector de ceros y unos y su suma prefija. Cada cola se atiende por antigüedad; un pedido devuelto
+tras una avería vuelve al frente.
+
 ### Log de eventos y resumen
 
 El log (`events.log` o la ruta de `--log`) lleva un objeto JSON por línea, con `t` en milisegundos

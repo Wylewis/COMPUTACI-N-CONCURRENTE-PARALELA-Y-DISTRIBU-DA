@@ -54,14 +54,14 @@ bool deliversAll(const CourierThread& t, std::int64_t n) {
     return t.delivered() == n;
 }
 
-struct Rig {  // una moto con su hilo, reloj x1000 y log propio
-    SimClock clock{1000.0};
+struct Rig {  // una moto con su hilo, reloj a escala y log propio
+    SimClock clock;
     StopSignal stop;
     EventLogger logger;
     Courier courier;
     CourierThread thread;
-    Rig(const std::string& path, const std::string& id, int bag, const Config& cfg, const Graph& g)
-        : logger(path, {id}), courier(id, "A", bag), thread(courier, g, cfg.restaurants, 36.0, logger, clock, stop) {
+    Rig(const std::string& path, const std::string& id, int bag, const Config& cfg, const Graph& g, double scale = 1000.0)
+        : clock(scale), logger(path, {id}), courier(id, "A", bag), thread(courier, g, cfg.restaurants, 36.0, logger, clock, stop) {
         clock.start();
         thread.start();
     }
@@ -92,7 +92,7 @@ int main() {
         check(r.logger.summary().delivered == 2 && r.logger.summary().deliveredPerCourier.at("c0") == 2, "resumen con 2 entregas");
     }
     {   // parada en mitad de un tramo: sale en el acto y queda en el ultimo nodo alcanzado
-        Rig r(path, "c1", 1, cfg, g);
+        Rig r(path, "c1", 1, cfg, g, 100.0);  // el tramo dura 1 s real: la carga de la maquina no lo adelanta
         Order o = created("o", "C", r.logger);
         r.thread.assign(o);
         std::this_thread::sleep_for(milliseconds(30));

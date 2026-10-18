@@ -52,6 +52,15 @@ sin ningún cerrojo, y al final se esperan todas las tareas. Si una tarea lanza 
 a quien construye la tabla a través de su future. El test compara la tabla paralela con la serial
 celda por celda y mide los tiempos de ambas.
 
+### Pool de hilos
+
+El módulo `thread_pool` crea N hilos una sola vez y los reutiliza: los trabajos entran a una cola
+protegida por un mutex y una variable de condición, cada hilo duerme sin consumir CPU hasta que
+haya trabajo, y cada trabajo enviado con `submit` devuelve un future con su resultado o con la
+excepción que lanzó (`packaged_task`). El mutex cubre solo la cola; los trabajos corren fuera del
+cerrojo. `stop` termina lo pendiente, despierta a todos los hilos y hace `join`. Es la base de las
+estimaciones concurrentes del despachador.
+
 ### Movimiento de las motos
 
 El módulo `route_motion` describe el viaje de una moto por una ruta a `fleet.speedKmh`, a partir

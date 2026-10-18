@@ -46,6 +46,7 @@ add_executable(delivery_sim
   src/thread_pool.cpp
   src/hardware.cpp
   src/stop_signal.cpp
+  src/event_logger.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -137,6 +138,14 @@ target_compile_options(hardware_test PRIVATE -Wall -Wextra)
 target_link_libraries(hardware_test PRIVATE Threads::Threads)
 apply_sanitizers(hardware_test)
 add_test(NAME hardware_test COMMAND hardware_test)
+
+add_executable(event_logger_test tests/event_logger_test.cpp src/event_logger.cpp src/event_log.cpp src/order.cpp)
+target_include_directories(event_logger_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(event_logger_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(event_logger_test PRIVATE -Wall -Wextra)
+target_link_libraries(event_logger_test PRIVATE Threads::Threads)
+apply_sanitizers(event_logger_test)
+add_test(NAME event_logger_test COMMAND event_logger_test)
 
 add_executable(stop_signal_test tests/stop_signal_test.cpp src/stop_signal.cpp)
 target_include_directories(stop_signal_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

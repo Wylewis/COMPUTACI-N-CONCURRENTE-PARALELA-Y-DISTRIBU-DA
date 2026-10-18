@@ -25,6 +25,12 @@ struct CourierView {
     std::vector<std::string> deliveryNodes;
 };
 
+struct BagItem {
+    std::string id, restaurantId, deliveryNode;
+    OrderState state = OrderState::Assigned;
+    std::int64_t readyAtMs = 0;
+};
+
 // Monitor de una moto: estado, nodo, viaje en curso y mochila con reserva.
 class Courier {
 public:
@@ -50,6 +56,7 @@ public:
 
     CourierSnapshot estimateSnapshot(std::int64_t nowMs) const;
     CourierView view() const;
+    std::vector<BagItem> bagItems() const;
     std::optional<std::string> nearestDelivery(const Graph& graph) const;
 
 private:

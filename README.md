@@ -108,6 +108,17 @@ da lo que la ventana dibuja. El viaje es un `RouteMotion` inmutable compartido c
 así la ventana calcula la posición en cualquier instante sin volver a tomar el cerrojo. Entre los
 pedidos ya recogidos, `nearestDelivery` elige el destino más cercano por calles desde el nodo actual.
 
+### Hilo del repartidor
+
+El módulo `courier_thread` es el hilo de cada moto. Sin pedidos duerme en su propia variable de
+condición, sin consumir CPU; `assign` reserva el pedido, publica `orderAssigned` y lo despierta,
+todo bajo el mutex del hilo para que ningún evento posterior del pedido se adelante en el log. Con
+pedidos, va al restaurante del más antiguo, recoge los que lleva de ese restaurante (espera a que
+estén listos más 60 s simulados de mostrador) y entrega los recogidos empezando por el destino más
+cercano por calles, con 60 s en la puerta. Cada tramo y cada espera es un `StopSignal::waitUntil`
+sobre el instante simulado: no hay sondeo y la parada lo interrumpe en el acto, dejándolo en el
+último nodo alcanzado. La fila y los puestos de recogida llegan con el monitor del restaurante.
+
 ### Ejecución y apagado
 
 Al arrancar, `main` carga y valida el config, construye el grafo y la tabla de distancias, crea el

@@ -20,6 +20,8 @@ int Courier::indexOf(const std::string& orderId) const {
 bool Courier::reserve(Order& order) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (state_ == CourierState::BrokenDown || static_cast<int>(bag_.size()) >= bagCapacity_) return false;
+    if (order.state == OrderState::Created) order.transitionTo(OrderState::Assigned);
+    order.courierId = id_;
     bag_.push_back(std::move(order));
     return true;
 }
@@ -86,6 +88,13 @@ CourierView Courier::view() const {
     CourierView v{id_, state_, node_, trip_, static_cast<int>(bag_.size()), bagCapacity_, {}};
     for (const Order& o : bag_) v.deliveryNodes.push_back(o.deliveryNode);
     return v;
+}
+
+std::vector<BagItem> Courier::bagItems() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<BagItem> items;
+    for (const Order& o : bag_) items.push_back({o.id, o.restaurantId, o.deliveryNode, o.state, o.readyAtMs});
+    return items;
 }
 
 std::optional<std::string> Courier::nearestDelivery(const Graph& graph) const {

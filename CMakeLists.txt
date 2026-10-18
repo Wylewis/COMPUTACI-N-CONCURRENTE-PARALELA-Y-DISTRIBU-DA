@@ -50,6 +50,7 @@ add_executable(delivery_sim
   src/order_book.cpp
   src/generator_thread.cpp
   src/courier.cpp
+  src/courier_thread.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM

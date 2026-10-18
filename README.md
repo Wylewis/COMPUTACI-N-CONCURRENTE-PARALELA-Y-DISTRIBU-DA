@@ -101,7 +101,8 @@ señales, lanza el hilo generador e imprime `Simulation has started...`. Despué
 cumpla `simulation.durationS` o llegue SIGINT o SIGTERM, lo que ocurra primero. El apagado es
 ordenado: se pide la parada, el generador termina y se une, se registra `simulationStopping`, el
 libro se cierra y lo que quedaba en espera es `pending`, el log se cierra y el resumen final se
-imprime como última línea de stdout.
+imprime como última línea de stdout. `tests/run_sim_tests.sh` corre el programa por tiempo
+cumplido, por SIGINT y por SIGTERM y verifica cada corrida con `check_log.py`.
 
 El hilo generador (`generator_thread`) itera sobre las ráfagas: duerme hasta el instante simulado de
 la próxima con la espera interrumpible de la señal de parada, entrega la ráfaga al libro y publica

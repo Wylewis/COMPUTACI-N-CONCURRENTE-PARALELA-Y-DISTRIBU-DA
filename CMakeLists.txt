@@ -48,6 +48,7 @@ add_executable(delivery_sim
   src/stop_signal.cpp
   src/event_logger.cpp
   src/order_book.cpp
+  src/generator_thread.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM

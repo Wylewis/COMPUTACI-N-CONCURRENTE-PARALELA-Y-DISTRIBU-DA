@@ -111,5 +111,6 @@ bool CourierThread::deliver(const std::string& orderId) {
     order->markDelivered(clock_.nowMs());
     logger_.publish(Event::orderDelivered(order->deliveredAtMs, order->id, courier_.id()));
     delivered_.fetch_add(1, std::memory_order_acq_rel);
+    if (onFreed_) onFreed_();
     return true;
 }

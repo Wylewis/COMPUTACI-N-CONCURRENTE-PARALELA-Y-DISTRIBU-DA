@@ -1,0 +1,74 @@
+#include "fleet.h"
+
+Fleet::Fleet(const FleetConfig& cfg, const Graph& graph, const std::vector<RestaurantConfig>& restaurants,
+             EventLogger& logger, const SimClock& clock, StopSignal& stop)
+    : stop_(stop) {
+    for (const std::string& id : courierIds(cfg.couriers)) {
+        index_[id] = couriers_.size();
+        couriers_.push_back(std::make_unique<Courier>(id, cfg.startNode, cfg.bagCapacity));
+        threads_.push_back(std::make_unique<CourierThread>(*couriers_.back(), graph, restaurants, cfg.speedKmh, logger,
+                                                           clock, stop));
+        threads_.back()->onFreed([this] { freed(); });
+    }
+}
+
+std::vector<std::string> Fleet::courierIds(int couriers) {
+    std::vector<std::string> ids;
+    for (int i = 0; i < couriers; ++i) ids.push_back("c" + std::to_string(i));
+    return ids;
+}
+
+void Fleet::start() {
+    for (auto& t : threads_) t->start();
+}
+
+void Fleet::join() {
+    wake();
+    for (auto& t : threads_) t->join();
+}
+
+void Fleet::wake() {
+    { std::lock_guard<std::mutex> lock(mutex_); }
+    cv_.notify_all();
+}
+
+std::vector<CourierSnapshot> Fleet::snapshots(std::int64_t nowMs) const {
+    std::vector<CourierSnapshot> out;
+    for (const auto& c : couriers_) out.push_back(c->estimateSnapshot(nowMs));
+    return out;
+}
+
+std::vector<CourierView> Fleet::views() const {
+    std::vector<CourierView> out;
+    for (const auto& c : couriers_) out.push_back(c->view());
+    return out;
+}
+
+bool Fleet::assign(const std::string& courierId, Order& order) {
+    const auto it = index_.find(courierId);
+    return it != index_.end() && threads_[it->second]->assign(order);
+}
+
+std::int64_t Fleet::delivered() const {
+    std::int64_t n = 0;
+    for (const auto& t : threads_) n += t->delivered();
+    return n;
+}
+
+std::uint64_t Fleet::version() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return version_;
+}
+
+void Fleet::waitForChange(std::uint64_t seen) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [&] { return version_ != seen || stop_.requested(); });
+}
+
+void Fleet::freed() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++version_;
+    }
+    cv_.notify_all();
+}

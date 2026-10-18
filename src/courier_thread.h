@@ -3,6 +3,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -29,6 +30,7 @@ public:
     void start();
     void join();  // despues de stop.request()
 
+    void onFreed(std::function<void()> f) { onFreed_ = std::move(f); }  // antes de start(): aviso por entrega
     bool assign(Order& order);  // reserva + orderAssigned; false y pedido intacto si no cabe
     std::int64_t delivered() const { return delivered_.load(std::memory_order_acquire); }
 
@@ -52,4 +54,5 @@ private:
     std::condition_variable cv_;
     std::thread thread_;
     std::atomic<std::int64_t> delivered_{0};
+    std::function<void()> onFreed_;
 };

@@ -118,6 +118,12 @@ Los contadores del resumen final se actualizan al escribir cada línea, así que
 con el log por construcción: `created = delivered + rejected + pending`, y `avgDeliveryMs` y
 `maxDeliveryMs` se miden desde `orderCreated` hasta `orderDelivered`.
 
+El módulo `event_logger` pone ese log detrás de una cola productor-consumidor: todos los hilos
+publican eventos con `publish`, y un único hilo escritor los saca y los escribe con `EventLog`. El
+mutex cubre solo la cola; el escritor toma todo lo pendiente de una vez y escribe a disco fuera del
+cerrojo, así quien publica nunca espera al disco. `close` escribe lo pendiente, une el hilo y deja
+el resumen definitivo.
+
 ### Verificador del log
 
 `tools/check_log.py` comprueba un log y su resumen contra las reglas de las secciones 4, 6 y 7,

@@ -60,6 +60,7 @@ struct Rig {
     StopSignal stop;
     EventLogger logger;
     OrderBook book;
+    ThreadPool estimators{4};
     Restaurants restaurants;
     Fleet fleet;
     std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
@@ -69,7 +70,7 @@ struct Rig {
         cfg.dispatch.acceptTimeoutMs = acceptMs;
         for (int r : which)
             dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0,
-                                                                      cfg.dispatch, logger, clock, stop));
+                                                                      cfg.dispatch, estimators, logger, clock, stop));
         clock.start();
         fleet.start();
         for (auto& d : dispatchers) d->start();

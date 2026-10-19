@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
         std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
         for (const RestaurantConfig& r : config.restaurants) {
             dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,
-                                                                     config.dispatch, logger, clock, stop));
+                                                                     config.dispatch, estimators, logger, clock, stop));
         }
 
         clock.start();

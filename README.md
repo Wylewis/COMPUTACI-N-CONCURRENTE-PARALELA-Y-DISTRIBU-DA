@@ -123,8 +123,12 @@ el radio, los anillos recorridos y cuántas estimaciones costó, para los experi
 El map de cada anillo es intercambiable: `selectCourier` acepta un `Mapper`, y `estimateAllAsync`
 es el concurrente: una tarea por candidato con `std::async(launch::async)`, espera de los resultados
 hasta `dispatch.quoteTimeoutMs` (tiempo real), las que llegan tarde se ignoran y una estimación que
-lanza `EstimateError` se descarta como error, sin tumbar al despachador. El despachador usa este map
-y cuenta las tardías.
+lanza `EstimateError` se descarta como error, sin tumbar al despachador. `estimateAllPooled` hace
+lo mismo enviando las tareas al pool de estimación en vez de crear un hilo por candidato; sus
+futures vienen de `packaged_task` y no se unen al destruirse, así una tarea tardía sigue en el pool
+sin retener al despachador. El despachador usa el map sobre el pool, pasa a las tareas una copia
+del pedido (una tardía puede seguir viva cuando el original ya se movió a la moto) y cuenta las
+tardías.
 
 ### Restaurante
 

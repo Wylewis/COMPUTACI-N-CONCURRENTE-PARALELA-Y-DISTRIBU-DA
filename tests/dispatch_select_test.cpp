@@ -96,6 +96,19 @@ int main() {
         check(timed.late == 1 && timed.failed == 2 && timed.estimates.size() == 1 && timed.estimates[0].courierId == "c1",
               "la tardia se ignora, las que lanzan se cuentan y solo queda c1");
 
+        ThreadPool pool(4);
+        const AsyncEstimates pooled = estimateAllPooled(fleet, one, pool, std::chrono::milliseconds(500));
+        bool samePool = pooled.estimates.size() == serial.size();
+        for (std::size_t i = 0; samePool && i < serial.size(); ++i)
+            samePool = pooled.estimates[i].courierId == serial[i].courierId && pooled.estimates[i].deliveryAtMs == serial[i].deliveryAtMs;
+        check(samePool && pooled.late == 0 && pooled.failed == 1, "sobre el pool, lo mismo que en serie");
+        const auto before = std::chrono::steady_clock::now();
+        const AsyncEstimates pooledTimed = estimateAllPooled(fleet, slowOrBad, pool, std::chrono::milliseconds(20));
+        const auto waited = std::chrono::steady_clock::now() - before;
+        check(pooledTimed.late == 1 && pooledTimed.failed == 2 && pooledTimed.estimates.size() == 1 &&
+                  waited < std::chrono::milliseconds(60),
+              "sobre el pool la tardia se ignora de verdad: la llamada vuelve al vencer el plazo, no al terminar la tarea");
+
         int calls = 0;
         const Mapper counting = [&](const std::vector<CourierSnapshot>& ring) { ++calls; return estimateAll(ring, toC, r0, g, 36.0, 0); };
         const auto sel = selectCourier(fleet, toC, r0, g, 36.0, 0, kFirstRadiusM, counting);

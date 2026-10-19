@@ -1,0 +1,86 @@
+AddressSanitizer + LeakSanitizer: corrida completa de delivery_sim en Linux
+fecha: Mon Oct 19 17:59:01 UTC 2026
+maquina: Linux 6.12.76-linuxkit aarch64 (contenedor Docker, 18 hilos)
+compilador: g++ (Debian 12.2.0-14+deb12u1) 12.2.0; cmake version 3.25.1
+commit: 9a4fa27
+salida sin editar; solo las rutas del directorio temporal se abrevian como <tmp>
+
+=== 0. suite de pruebas (ctest) bajo AddressSanitizer ===
+      Start 10: map_projection_test
+10/27 Test #10: map_projection_test ..............   Passed    0.48 sec
+      Start 11: hardware_test
+11/27 Test #11: hardware_test ....................   Passed    0.48 sec
+      Start 12: live_counters_test
+12/27 Test #12: live_counters_test ...............   Passed    0.53 sec
+      Start 13: breakdown_test
+13/27 Test #13: breakdown_test ...................   Passed    0.48 sec
+      Start 14: restaurant_test
+14/27 Test #14: restaurant_test ..................   Passed    0.64 sec
+      Start 15: fleet_test
+15/27 Test #15: fleet_test .......................   Passed    0.76 sec
+      Start 16: stress_test
+16/27 Test #16: stress_test ......................   Passed    2.69 sec
+      Start 17: dispatcher_thread_test
+17/27 Test #17: dispatcher_thread_test ...........   Passed    1.77 sec
+      Start 18: dispatch_select_test
+18/27 Test #18: dispatch_select_test .............   Passed    0.66 sec
+      Start 19: courier_thread_test
+19/27 Test #19: courier_thread_test ..............   Passed    2.19 sec
+      Start 20: courier_test
+20/27 Test #20: courier_test .....................   Passed    0.48 sec
+      Start 21: order_book_test
+21/27 Test #21: order_book_test ..................   Passed    0.62 sec
+      Start 22: event_logger_test
+22/27 Test #22: event_logger_test ................   Passed    0.52 sec
+      Start 23: stop_signal_test
+23/27 Test #23: stop_signal_test .................   Passed    0.80 sec
+      Start 24: thread_pool_test
+24/27 Test #24: thread_pool_test .................   Passed    0.64 sec
+      Start 25: sim_tests
+25/27 Test #25: sim_tests ........................   Passed    5.62 sec
+      Start 26: check_log_test
+26/27 Test #26: check_log_test ...................   Passed    0.02 sec
+      Start 27: config_tests
+27/27 Test #27: config_tests .....................   Passed    6.28 sec
+
+100% tests passed, 0 tests failed out of 27
+
+Total Test time (real) =  30.16 sec
+estado de salida: 0
+
+=== 1. fin por tiempo cumplido ===
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 8 repartidores; 630 aristas; mapa /src/data/equipetrol.png; log <tmp>/tiempo.log
+delivery_sim: tabla de distancias de 9 restaurantes en 714 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+Simulation has started...
+delivery_sim: parada por tiempo cumplido a los 1804118 ms simulados; 178 rafagas, 452 pedidos creados, 301 rechazados al crear, 74 asignados (209 reintentos, 0 estimaciones tardias), 59 sin repartidor, 17 entregados, 20 averias, 3 rescates, 58 en el libro y 17 en mochilas
+{"created":452,"delivered":17,"rejected":360,"pending":75,"reassigned":22,"breakdowns":20,"avgDeliveryMs":1065629,"maxDeliveryMs":1717310,"deliveredPerCourier":{"c0":4,"c1":1,"c2":3,"c3":0,"c4":1,"c5":2,"c6":4,"c7":2}}
+estado de salida: 0
+  maxDeliveryMs: 1717310
+  deliveredPerCourier: {'c0': 4, 'c6': 4, 'c4': 1, 'c1': 1, 'c2': 3, 'c5': 2, 'c7': 2}
+check_log: sin errores
+
+=== 2. SIGINT a mitad de la corrida ===
+estado de salida: 0
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 8 repartidores; 630 aristas; mapa /src/data/equipetrol.png; log <tmp>/senal.log
+delivery_sim: tabla de distancias de 9 restaurantes en 1016 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+Simulation has started...
+delivery_sim: parada por senal a los 1198777 ms simulados; 126 rafagas, 296 pedidos creados, 188 rechazados al crear, 59 asignados (146 reintentos, 0 estimaciones tardias), 20 sin repartidor, 10 entregados, 14 averias, 2 rescates, 57 en el libro y 21 en mochilas
+{"created":296,"delivered":10,"rejected":208,"pending":78,"reassigned":14,"breakdowns":14,"avgDeliveryMs":702805,"maxDeliveryMs":1060746,"deliveredPerCourier":{"c0":3,"c1":1,"c2":2,"c3":0,"c4":1,"c5":0,"c6":2,"c7":1}}
+  maxDeliveryMs: 1060746
+  deliveredPerCourier: {'c0': 3, 'c1': 1, 'c6': 2, 'c4': 1, 'c2': 2, 'c7': 1}
+check_log: sin errores
+
+=== 3. estres de averias simultaneas ===
+breakdown_stress_test: 24 motos, 400 pedidos, 64 entregados, 377 averias, 624 reasignaciones, 60 rescates, 130 pendientes (119 en el libro, 11 en mochilas); apagado en 0.00385767 s
+breakdown_stress_test: todas las pruebas pasaron
+estado de salida: 0
+  maxDeliveryMs: 5780095
+  deliveredPerCourier: {'c19': 2, 'c1': 2, 'c11': 3, 'c5': 2, 'c18': 3, 'c10': 6, 'c12': 2, 'c14': 4, 'c0': 2, 'c13': 3, 'c8': 2, 'c9': 2, 'c16': 2, 'c15': 5, 'c22': 2, 'c6': 3, 'c17': 4, 'c3': 4, 'c20': 3, 'c7': 3, 'c23': 3, 'c4': 1, 'c21': 1}
+check_log: sin errores
+
+=== resumen ===
+errores de AddressSanitizer o LeakSanitizer: 0
+salidas con estado distinto de 0: 0
+logs con errores del verificador: 0

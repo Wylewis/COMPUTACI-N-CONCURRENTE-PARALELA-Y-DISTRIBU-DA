@@ -1,0 +1,7 @@
+# Imagen minima para la corrida de memoria en Linux: g++, CMake, make y
+# Python 3 (para check_log.py y los scripts de prueba). Sin OpenCV: la
+# simulacion se corre con --no-window.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends g++ cmake make python3 git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src

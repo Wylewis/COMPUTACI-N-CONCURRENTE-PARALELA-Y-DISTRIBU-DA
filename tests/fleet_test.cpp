@@ -63,6 +63,7 @@ int main() {
     fleet.join();
     waiter.join();
     check(fleet.version() == v1, "la parada despierta a los dormidos sin cambiar la version");
+    check(fleet.rescues() == 0 && fleet.breakdowns() == 0, "sin averias no hay rescates");
     logger.close();
     std::remove(path.c_str());
 

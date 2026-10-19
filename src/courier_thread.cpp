@@ -41,15 +41,43 @@ std::vector<BagItem> CourierThread::items() {
 
 bool CourierThread::waitSim(std::int64_t simMs) { return !stop_.waitUntil(clock_.realTimeFor(simMs)); }
 
+void CourierThread::rescue(Courier& broken) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        rescues_queue_.push_back(&broken);
+    }
+    cv_.notify_one();
+}
+
 void CourierThread::run() {
     int parked = 0;  // pedidos que quedaron en la mochila al dormirse: solo un cambio lo despierta
     for (;;) {
         std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [&] { return stop_.requested() || courier_.bagCount() != parked; });
+        cv_.wait(lock, [&] { return stop_.requested() || !rescues_queue_.empty() || courier_.bagCount() != parked; });
+        if (stop_.requested()) return;
+        Courier* broken = nullptr;
+        if (!rescues_queue_.empty()) {
+            broken = rescues_queue_.front();
+            rescues_queue_.pop_front();
+        }
         lock.unlock();
-        if (stop_.requested() || !serveBag()) return;
+        if (broken && !serveRescue(*broken)) return;
+        if (!serveBag()) return;
         parked = courier_.bagCount();
     }
+}
+
+bool CourierThread::serveRescue(Courier& broken) {
+    const Travel t = travelTo(broken.node(), CourierState::ToRestaurant);  // la averiada es un punto de recogida
+    if (t == Travel::Stopped) return false;
+    if (t != Travel::Arrived) {
+        if (onRescueNeeded_) onRescueNeeded_(broken.id());  // que lo intente otra moto
+        return true;
+    }
+    for (const std::string& id : courier_.takeOverFrom(broken))
+        logger_.publish(Event::orderReassigned(clock_.nowMs(), id, broken.id(), courier_.id()));
+    rescues_.fetch_add(1, std::memory_order_acq_rel);
+    return true;
 }
 
 bool CourierThread::serveBag() {
@@ -110,6 +138,7 @@ bool CourierThread::breakDownAt(const std::string& node) {
         std::optional<Order> o = courier_.removeOrder(b.id);
         if (o && onReleased_) onReleased_(std::move(*o));
     }
+    if (courier_.bagCount() > 0 && onRescueNeeded_) onRescueNeeded_(courier_.id());  // quedan recogidos
     if (!waitSim(clock_.nowMs() + kRepairMs)) return false;
     courier_.setState(CourierState::Idle);
     if (onFreed_) onFreed_();  // vuelve al servicio: la flota cambio

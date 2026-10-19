@@ -186,6 +186,37 @@ int main() {
         check(hasBreak && hasReassign && sm.breakdowns == 1 && sm.reassigned == 1 && sm.delivered == 1,
               "el log tiene courierBreakdown y orderReassigned y el resumen los cuenta");
     }
+    {   // traspaso: f0 recoge en B y se averia camino a D con el pedido recogido; f1, cerca, llega antes de la
+        // reparacion, va hasta ella y lo entrega
+        std::remove(path.c_str());
+        Config city = cfg;  // A-B-C-D: el viaje B->D tiene dos tramos
+        city.nodes.push_back({"D", 0.0, 0.0359728});
+        city.streets.push_back({"cd", "C", "D", false});
+        const Graph g4(city);
+        SimClock clock(1000.0);
+        StopSignal stop;
+        EventLogger logger(path, {"f0", "f1"});
+        Restaurants restaurants(city.restaurants);
+        Courier c0("f0", "B", 1), c1("f1", "C", 1);
+        CourierThread t0(c0, g4, restaurants, 36.0, logger, clock, stop), t1(c1, g4, restaurants, 36.0, logger, clock, stop);
+        t0.enableBreakdowns(3, 0, 1.0);
+        t0.onRescueNeeded([&](const std::string&) { t1.rescue(c0); });
+        clock.start();
+        t0.start(), t1.start();
+        Order o = created("o", "D", logger);
+        t0.assign(o);
+        check(deliversAll(t1, 1) && t1.rescues() == 1 && c0.bagCount() == 0, "f1 rescata el pedido recogido y lo entrega");
+        stop.request();
+        t0.join(), t1.join();
+        logger.close();
+        const auto ev = events(path);
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            {"orderCreated", "o"}, {"orderAssigned", "o"}, {"pickupStarted", "o"}, {"orderPickedUp", "o"},
+            {"courierBreakdown", ""}, {"orderReassigned", "o"}, {"orderDelivered", "o"}};
+        const Summary sm = logger.summary();
+        check(ev == expected && sm.reassigned == 1 && sm.breakdowns == 1 && sm.deliveredPerCourier.at("f1") == 1,
+              "secuencia: recogida, averia, traspaso y entrega por la rescatista");
+    }
     std::remove(path.c_str());
 
     if (failures == 0) {

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -43,6 +44,10 @@ public:
     // Antes de start(): averias con la probabilidad de la configuracion, y a quien devolver los pedidos liberados.
     void enableBreakdowns(const IncidentsConfig& incidents, std::uint64_t seed, std::function<void(Order)> release);
     std::int64_t breakdowns() const;
+    // Pide una moto de rescate para la averiada: la mas cercana en linea recta con lugar; si no hay, queda
+    // pendiente y se reintenta en cada cambio de la flota.
+    void rescue(const std::string& brokenId);
+    std::int64_t rescues() const;
     std::int64_t delivered() const;
 
     std::uint64_t version() const;
@@ -56,9 +61,11 @@ private:
     std::vector<std::unique_ptr<Courier>> couriers_;
     std::vector<std::unique_ptr<CourierThread>> threads_;
     std::unordered_map<std::string, std::size_t> index_;
+    const Graph& graph_;
     Restaurants& restaurants_;
     StopSignal& stop_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     std::uint64_t version_ = 0;
+    std::deque<std::string> pendingRescues_;  // bajo mutex_
 };

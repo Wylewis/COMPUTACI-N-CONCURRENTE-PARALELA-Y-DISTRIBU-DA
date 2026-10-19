@@ -1,14 +1,19 @@
 #include "fleet.h"
 
+#include <optional>
+
+#include "dispatch_select.h"
+
 Fleet::Fleet(const FleetConfig& cfg, const Graph& graph, Restaurants& restaurants, EventLogger& logger,
              const SimClock& clock, StopSignal& stop)
-    : restaurants_(restaurants), stop_(stop) {
+    : graph_(graph), restaurants_(restaurants), stop_(stop) {
     for (const std::string& id : courierIds(cfg.couriers)) {
         index_[id] = couriers_.size();
         couriers_.push_back(std::make_unique<Courier>(id, cfg.startNode, cfg.bagCapacity));
         threads_.push_back(std::make_unique<CourierThread>(*couriers_.back(), graph, restaurants, cfg.speedKmh, logger,
                                                            clock, stop));
         threads_.back()->onFreed([this] { freed(); });
+        threads_.back()->onRescueNeeded([this](const std::string& id) { rescue(id); });
     }
 }
 
@@ -85,10 +90,38 @@ bool Fleet::waitForChange(std::uint64_t seen, std::chrono::steady_clock::time_po
     return version_ != seen;
 }
 
+void Fleet::rescue(const std::string& brokenId) {
+    const Courier& broken = *couriers_[index_.at(brokenId)];
+    std::optional<std::size_t> best;
+    double bestM = 0.0;
+    for (std::size_t i = 0; i < couriers_.size(); ++i) {
+        const CourierSnapshot s = couriers_[i]->estimateSnapshot(0);
+        if (s.id == brokenId || s.broken || s.bagCount >= s.bagCapacity) continue;
+        const double d = straightLineM(graph_, s.node, broken.node());
+        if (!best || d < bestM) best = i, bestM = d;
+    }
+    if (best) {
+        threads_[*best]->rescue(*couriers_[index_.at(brokenId)]);
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    pendingRescues_.push_back(brokenId);
+}
+
+std::int64_t Fleet::rescues() const {
+    std::int64_t n = 0;
+    for (const auto& t : threads_) n += t->rescues();
+    return n;
+}
+
 void Fleet::freed() {
+    std::deque<std::string> retry;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ++version_;
+        retry.swap(pendingRescues_);
     }
     cv_.notify_all();
+    for (const std::string& id : retry)
+        if (couriers_[index_.at(id)]->state() == CourierState::BrokenDown) rescue(id);
 }

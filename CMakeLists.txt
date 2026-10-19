@@ -56,6 +56,7 @@ add_executable(delivery_sim
   src/dispatcher_thread.cpp
   src/restaurant.cpp
   src/restaurants.cpp
+  src/breakdown.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -147,6 +148,12 @@ target_compile_options(hardware_test PRIVATE -Wall -Wextra)
 target_link_libraries(hardware_test PRIVATE Threads::Threads)
 apply_sanitizers(hardware_test)
 add_test(NAME hardware_test COMMAND hardware_test)
+
+add_executable(breakdown_test tests/breakdown_test.cpp src/breakdown.cpp)
+target_include_directories(breakdown_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(breakdown_test PRIVATE -Wall -Wextra)
+apply_sanitizers(breakdown_test)
+add_test(NAME breakdown_test COMMAND breakdown_test)
 
 add_executable(restaurant_test tests/restaurant_test.cpp src/restaurant.cpp src/stop_signal.cpp src/config.cpp)
 target_include_directories(restaurant_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

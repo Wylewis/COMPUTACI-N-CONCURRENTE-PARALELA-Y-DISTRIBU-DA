@@ -259,7 +259,9 @@ python3 tools/check_log.py events.log --summary resumen.json --config config/equ
 Revisa que cada línea sea un objeto JSON con exactamente las propiedades de su evento; que cada
 pedido siga `created → assigned → pickedUp → delivered` sin saltos ni retrocesos y termine en un
 solo estado final; que `t` nunca disminuya para un pedido; que cada pedido tenga un único
-repartidor a la vez y los traspasos vayan del repartidor actual a otro; con `--config`, que
+repartidor a la vez y los traspasos vayan del repartidor actual a otro; que `courierBreakdown`
+libere las reservas no recogidas de esa moto (salen de su mochila y solo pueden volver por
+`orderReassigned` a otra o por `orderAssigned` a la misma al repararse); con `--config`, que
 ninguna mochila supere `bagCapacity` ni ningún restaurante tenga más repartidores recogiendo que
 `pickupSlots`; que no se creen pedidos después de `simulationStopping`; y con `--summary`, que
 cada contador del resumen sea igual a las líneas del log. Sale con 0 si no hay errores.

@@ -55,6 +55,35 @@ GOOD_SUMMARY = {"created": 4, "delivered": 1, "rejected": 1, "pending": 2, "reas
 expect("log correcto sin resumen", GOOD, None, config=CONFIG)
 expect("log correcto con resumen", GOOD, None, GOOD_SUMMARY, CONFIG)
 
+# Liberacion por averia: los no recogidos salen de la mochila de la averiada
+RELEASE = [
+    ev(1, "orderCreated", order="a", restaurant="r0"),
+    ev(1, "orderCreated", order="b", restaurant="r0"),
+    ev(1, "orderCreated", order="c", restaurant="r0"),
+    ev(1, "orderCreated", order="d", restaurant="r0"),
+    ev(2, "orderAssigned", order="a", courier="c1"),
+    ev(2, "orderAssigned", order="b", courier="c1"),
+    ev(3, "courierBreakdown", courier="c1"),
+]
+expect("la averiada retoma su pedido liberado con orderAssigned",
+       RELEASE + [ev(4, "orderAssigned", order="a", courier="c1"), ev(9, "simulationStopping")], None, config=CONFIG)
+expect("otra moto toma el liberado con orderReassigned desde la averiada",
+       RELEASE + [ev(4, "orderReassigned", order="a", **{"from": "c1", "to": "c0"}), ev(9, "simulationStopping")], None, config=CONFIG)
+expect("un liberado no se asigna a otra moto con orderAssigned",
+       RELEASE + [ev(4, "orderAssigned", order="a", courier="c0")], "debe ser orderReassigned")
+expect("tras liberar, la averiada reparada puede llenar la mochila de nuevo",
+       RELEASE + [ev(4, "orderAssigned", order="c", courier="c1"), ev(4, "orderAssigned", order="d", courier="c1"),
+                  ev(9, "simulationStopping")], None, config=CONFIG)
+expect("pero no mas que la capacidad contando lo que retoma",
+       RELEASE + [ev(4, "orderAssigned", order="c", courier="c1"), ev(4, "orderAssigned", order="d", courier="c1"),
+                  ev(5, "orderAssigned", order="a", courier="c1")], "lleva 3 pedidos, capacidad 2", config=CONFIG)
+expect("un reasignado desde liberado vuelve a estar asignado y se recoge",
+       RELEASE + [ev(4, "orderReassigned", order="a", **{"from": "c1", "to": "c0"}),
+                  ev(5, "pickupStarted", order="a", courier="c0", restaurant="r0"), ev(9, "simulationStopping")],
+       None, config=CONFIG)
+expect("un liberado no se recoge sin volver a asignarse",
+       RELEASE + [ev(4, "pickupStarted", order="a", courier="c1", restaurant="r0")], "pickupStarted desde released")
+
 # Formato
 expect("JSON invalido", GOOD[:1] + ['{"t": 5, "event": '] + GOOD[1:], "JSON invalido")
 expect("t negativo", [ev(-1, "orderCreated", order="x", restaurant="r0")] + GOOD, "'t' debe ser un entero")

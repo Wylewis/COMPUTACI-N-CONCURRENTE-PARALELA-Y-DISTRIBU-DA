@@ -12,7 +12,7 @@ std::vector<CourierSnapshot> ringCandidates(const std::vector<CourierSnapshot>& 
                                             const std::string& restaurantNode, double innerM, double outerM) {
     std::vector<CourierSnapshot> out;
     for (const CourierSnapshot& c : fleet) {
-        if (c.bagCount >= c.bagCapacity) continue;
+        if (c.broken || c.bagCount >= c.bagCapacity) continue;
         const double d = straightLineM(graph, c.node, restaurantNode);
         if (d > innerM && d <= outerM) out.push_back(c);
     }

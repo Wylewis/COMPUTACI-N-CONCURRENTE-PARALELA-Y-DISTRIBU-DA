@@ -77,6 +77,7 @@ CourierSnapshot Courier::estimateSnapshot(std::int64_t nowMs) const {
     s.id = id_;
     s.bagCount = static_cast<int>(bag_.size());
     s.bagCapacity = bagCapacity_;
+    s.broken = state_ == CourierState::BrokenDown;
     const bool moving = trip_ && !trip_->legs().empty();
     s.node = moving ? trip_->legs().back().to : node_;
     s.availableAtMs = moving ? std::max(nowMs, trip_->arrivalMs()) : nowMs;

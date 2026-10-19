@@ -50,6 +50,19 @@ bool Fleet::assign(const std::string& courierId, Order& order) {
     return it != index_.end() && threads_[it->second]->assign(order);
 }
 
+void Fleet::enableBreakdowns(const IncidentsConfig& incidents, std::uint64_t seed, std::function<void(Order)> release) {
+    for (std::size_t i = 0; i < threads_.size(); ++i) {
+        threads_[i]->enableBreakdowns(seed, i, incidents.breakdownProbability);
+        threads_[i]->onReleased(release);
+    }
+}
+
+std::int64_t Fleet::breakdowns() const {
+    std::int64_t n = 0;
+    for (const auto& t : threads_) n += t->breakdowns();
+    return n;
+}
+
 std::int64_t Fleet::delivered() const {
     std::int64_t n = 0;
     for (const auto& t : threads_) n += t->delivered();

@@ -23,10 +23,12 @@ void CourierThread::join() {
 
 bool CourierThread::assign(Order& order) {
     const std::string id = order.id;
+    const std::string from = order.courierId;  // no vacio: viene de una moto averiada
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!courier_.reserve(order)) return false;
-        logger_.publish(Event::orderAssigned(clock_.nowMs(), id, courier_.id()));
+        if (from.empty()) logger_.publish(Event::orderAssigned(clock_.nowMs(), id, courier_.id()));
+        else logger_.publish(Event::orderReassigned(clock_.nowMs(), id, from, courier_.id()));
     }
     cv_.notify_one();
     return true;
@@ -57,8 +59,10 @@ bool CourierThread::serveBag() {
                                         [](const BagItem& b) { return b.state == OrderState::Assigned; });
         if (first != bag.end()) {
             const std::string restaurant = first->restaurantId;
-            if (!travelTo(restaurants_.at(restaurant).node(), CourierState::ToRestaurant)) return !stop_.requested();
-            if (!pickUpAt(restaurant, bag)) return false;
+            const Travel t = travelTo(restaurants_.at(restaurant).node(), CourierState::ToRestaurant);
+            if (t == Travel::Stopped) return false;
+            if (t == Travel::NoRoute) return true;
+            if (t == Travel::Arrived && !pickUpAt(restaurant, bag)) return false;
             continue;
         }
         const auto next = courier_.nearestDelivery(graph_);
@@ -66,29 +70,49 @@ bool CourierThread::serveBag() {
             courier_.setState(CourierState::Idle);
             return true;
         }
-        if (!travelTo(*next, CourierState::Delivering)) return !stop_.requested();
+        const Travel t = travelTo(*next, CourierState::Delivering);
+        if (t == Travel::Stopped) return false;
+        if (t == Travel::NoRoute) return true;
+        if (t == Travel::Interrupted) continue;
         for (const BagItem& b : bag)
             if (b.state == OrderState::PickedUp && b.deliveryNode == *next && !deliver(b.id)) return false;
     }
 }
 
-bool CourierThread::travelTo(const std::string& node, CourierState moving) {
+CourierThread::Travel CourierThread::travelTo(const std::string& node, CourierState moving) {
     const std::string from = courier_.node();
-    if (from == node) return true;
+    if (from == node) return Travel::Arrived;
     const auto route = graph_.shortestPath(from, node);
-    if (!route) return false;
+    if (!route) return Travel::NoRoute;
     const auto trip = std::make_shared<const RouteMotion>(*route, graph_, speedKmh_, clock_.nowMs());
     courier_.startTrip(trip, moving);
     std::int64_t legEndMs = trip->startMs();
     const std::vector<std::int64_t> durations = trip->legDurationsMs();
+    const std::optional<std::size_t> breakLeg = roll_ ? roll_->roll(durations.size()) : std::nullopt;
     for (std::size_t i = 0; i < durations.size(); ++i) {
         legEndMs += durations[i];
         if (!waitSim(legEndMs)) {
             courier_.endTrip(trip->legs()[i].from, CourierState::Idle);
-            return false;
+            return Travel::Stopped;
         }
+        if (breakLeg && *breakLeg == i) return breakDownAt(trip->legs()[i].to) ? Travel::Interrupted : Travel::Stopped;
     }
     courier_.endTrip(node, moving);
+    return Travel::Arrived;
+}
+
+bool CourierThread::breakDownAt(const std::string& node) {
+    courier_.endTrip(node, CourierState::BrokenDown);
+    breakdowns_.fetch_add(1, std::memory_order_acq_rel);
+    logger_.publish(Event::courierBreakdown(clock_.nowMs(), courier_.id()));
+    for (const BagItem& b : courier_.bagItems()) {  // las reservas no recogidas se liberan
+        if (b.state != OrderState::Assigned) continue;
+        std::optional<Order> o = courier_.removeOrder(b.id);
+        if (o && onReleased_) onReleased_(std::move(*o));
+    }
+    if (!waitSim(clock_.nowMs() + kRepairMs)) return false;
+    courier_.setState(CourierState::Idle);
+    if (onFreed_) onFreed_();  // vuelve al servicio: la flota cambio
     return true;
 }
 

@@ -23,6 +23,7 @@ struct CourierSnapshot {
     std::int64_t availableAtMs = 0; // instante simulado en que queda libre en ese nodo
     int bagCount = 0;               // pedidos que lleva (asignados o recogidos)
     int bagCapacity = 1;
+    bool broken = false;            // averiada: no se le asigna
 };
 
 // Resultado de una estimacion.

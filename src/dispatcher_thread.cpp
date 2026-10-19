@@ -5,10 +5,11 @@
 #include "dispatch_select.h"
 
 DispatcherThread::DispatcherThread(const RestaurantConfig& restaurant, OrderBook& book, Fleet& fleet,
-                                   const Graph& graph, double speedKmh, std::int64_t acceptTimeoutMs,
+                                   const Graph& graph, double speedKmh, const DispatchConfig& dispatch,
                                    EventLogger& logger, const SimClock& clock, StopSignal& stop)
     : restaurant_(restaurant), book_(book), fleet_(fleet), graph_(graph), speedKmh_(speedKmh),
-      acceptTimeoutMs_(acceptTimeoutMs), logger_(logger), clock_(clock), stop_(stop) {}
+      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), logger_(logger),
+      clock_(clock), stop_(stop) {}
 
 DispatcherThread::~DispatcherThread() { join(); }
 
@@ -37,7 +38,15 @@ DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
     while (!stop_.requested()) {
         const std::uint64_t seen = fleet_.version();
         const std::int64_t now = clock_.nowMs();
-        const auto sel = selectCourier(fleet_.snapshots(now), order, restaurant_, graph_, speedKmh_, now);
+        const Mapper concurrent = [&](const std::vector<CourierSnapshot>& ring) {
+            AsyncEstimates r = estimateAllAsync(
+                ring, [&](const CourierSnapshot& c) { return estimateDelivery(c, order, restaurant_, graph_, speedKmh_, now); },
+                quoteTimeout_);
+            lateQuotes_.fetch_add(r.late, std::memory_order_acq_rel);
+            return r.estimates;
+        };
+        const auto sel = selectCourier(fleet_.snapshots(now), order, restaurant_, graph_, speedKmh_, now, kFirstRadiusM,
+                                       concurrent);
         if (sel) {
             if (fleet_.assign(sel->estimate.courierId, order)) {
                 assigned_.fetch_add(1, std::memory_order_acq_rel);

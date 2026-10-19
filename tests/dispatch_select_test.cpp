@@ -1,4 +1,6 @@
+#include <chrono>
 #include <cmath>
+#include <thread>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -75,6 +77,29 @@ int main() {
         const auto onlyFar = selectCourier({fleet[0], fleet[2]}, toC, r0, g, 36.0, 0);
         check(onlyFar && onlyFar->estimate.courierId == "c0" && onlyFar->rings == 3 && onlyFar->radiusM == 1200.0,
               "tres anillos hasta llegar a c0");
+    }
+    {   // map concurrente: mismo resultado que en serie; la tardia se ignora; la que lanza es un error
+        const OneEstimate one = [&](const CourierSnapshot& c) { return estimateDelivery(c, toC, r0, g, 36.0, 0); };
+        const auto serial = estimateAll(fleet, toC, r0, g, 36.0, 0);
+        const AsyncEstimates par = estimateAllAsync(fleet, one, std::chrono::milliseconds(500));
+        bool same = par.estimates.size() == serial.size();
+        for (std::size_t i = 0; same && i < serial.size(); ++i)
+            same = par.estimates[i].courierId == serial[i].courierId && par.estimates[i].deliveryAtMs == serial[i].deliveryAtMs;
+        check(same && par.late == 0 && par.failed == 1, "el map concurrente da lo mismo que el serial y cuenta la mochila llena como error");
+
+        const OneEstimate slowOrBad = [&](const CourierSnapshot& c) {
+            if (c.id == "c0") std::this_thread::sleep_for(std::chrono::milliseconds(80));
+            if (c.id == "c3") throw EstimateError("sin ruta");
+            return estimateDelivery(c, toC, r0, g, 36.0, 0);
+        };
+        const AsyncEstimates timed = estimateAllAsync(fleet, slowOrBad, std::chrono::milliseconds(20));
+        check(timed.late == 1 && timed.failed == 2 && timed.estimates.size() == 1 && timed.estimates[0].courierId == "c1",
+              "la tardia se ignora, las que lanzan se cuentan y solo queda c1");
+
+        int calls = 0;
+        const Mapper counting = [&](const std::vector<CourierSnapshot>& ring) { ++calls; return estimateAll(ring, toC, r0, g, 36.0, 0); };
+        const auto sel = selectCourier(fleet, toC, r0, g, 36.0, 0, kFirstRadiusM, counting);
+        check(sel && sel->estimate.courierId == "c3" && calls == 1, "selectCourier usa el map que se le pasa, una vez por anillo");
     }
     {   // sin candidato: todos llenos, o destino inalcanzable, o flota vacia
         check(!selectCourier({at("c2", "D", 0, 2)}, toC, r0, g, 36.0, 0), "una flota llena no da seleccion");

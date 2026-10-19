@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
         std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
         for (const RestaurantConfig& r : config.restaurants) {
             dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,
-                                                                     config.dispatch.acceptTimeoutMs, logger, clock, stop));
+                                                                     config.dispatch, logger, clock, stop));
         }
 
         clock.start();
@@ -161,13 +161,15 @@ int main(int argc, char** argv) {
         for (const CourierSnapshot& c : fleet.snapshots(clock.nowMs())) inBags += static_cast<std::size_t>(c.bagCount);
         logger.close();
 
-        std::int64_t assigned = 0, rejectedNoCourier = 0, retries = 0;
-        for (const auto& d : dispatchers) assigned += d->assigned(), rejectedNoCourier += d->rejected(), retries += d->retries();
+        std::int64_t assigned = 0, rejectedNoCourier = 0, retries = 0, late = 0;
+        for (const auto& d : dispatchers)
+            assigned += d->assigned(), rejectedNoCourier += d->rejected(), retries += d->retries(), late += d->lateQuotes();
         std::cerr << "delivery_sim: parada por "
                   << (bySignal ? "senal" : windowClosed ? "ventana cerrada" : "tiempo cumplido") << " a los "
                   << clock.nowMs() << " ms simulados; " << generatorThread.batches() << " rafagas, "
                   << generatorThread.created() << " pedidos creados, " << generatorThread.rejected()
-                  << " rechazados al crear, " << assigned << " asignados (" << retries << " reintentos), "
+                  << " rechazados al crear, " << assigned << " asignados (" << retries << " reintentos, " << late
+                  << " estimaciones tardias), "
                   << rejectedNoCourier << " sin repartidor, " << fleet.delivered() << " entregados, "
                   << fleet.breakdowns() << " averias, " << fleet.rescues() << " rescates, " << unfinished.size()
                   << " en el libro y " << inBags << " en mochilas\n";

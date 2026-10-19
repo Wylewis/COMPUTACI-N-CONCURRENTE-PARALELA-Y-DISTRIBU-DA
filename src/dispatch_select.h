@@ -1,6 +1,8 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -30,6 +32,19 @@ std::vector<Estimate> estimateAll(const std::vector<CourierSnapshot>& candidates
                                   const RestaurantConfig& restaurant, const Graph& graph, double speedKmh,
                                   std::int64_t nowMs);
 
+// map concurrente: una tarea por candidato con std::async(launch::async).
+// Espera los resultados hasta `quoteTimeout` (tiempo real); los que llegan
+// tarde se ignoran y una estimacion que lanza se descarta como error. La
+// estimacion de un candidato la hace `one` (normalmente estimateDelivery).
+using OneEstimate = std::function<Estimate(const CourierSnapshot&)>;
+struct AsyncEstimates {
+    std::vector<Estimate> estimates;
+    int late = 0;
+    int failed = 0;
+};
+AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
+                                std::chrono::milliseconds quoteTimeout);
+
 // reduce: la de menor deliveryAtMs; en empate, el id menor (determinista).
 std::optional<Estimate> bestEstimate(const std::vector<Estimate>& estimates);
 
@@ -41,6 +56,9 @@ struct Selection {
 };
 
 // Radio creciente desde firstRadiusM, doblando, hasta cubrir a toda la flota.
+// El map de cada anillo lo hace `mapper`; por defecto, estimateAll en serie.
+using Mapper = std::function<std::vector<Estimate>(const std::vector<CourierSnapshot>&)>;
 std::optional<Selection> selectCourier(const std::vector<CourierSnapshot>& fleet, const Order& order,
                                        const RestaurantConfig& restaurant, const Graph& graph, double speedKmh,
-                                       std::int64_t nowMs, double firstRadiusM = kFirstRadiusM);
+                                       std::int64_t nowMs, double firstRadiusM = kFirstRadiusM,
+                                       const Mapper& mapper = {});

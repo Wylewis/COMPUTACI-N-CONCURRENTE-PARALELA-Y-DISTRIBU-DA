@@ -338,6 +338,13 @@ fin por SIGINT en menos de 5 s, fin por SIGTERM, y un ciclo completo de 40 minut
 segundo real con preparación corta y averías frecuentes, que exige entregas, recogidas, averías y
 reasignaciones reales y que el resumen cuadre con el log.
 
+`tests/run_stress_test.sh` corre `breakdown_stress_test`: 24 motos, 400 pedidos, dos restaurantes y
+probabilidad de avería 1, así todo viaje termina en avería y se encadenan liberaciones,
+reasignaciones, rescates que también se averían y reparaciones. Exige que el apagado termine en
+menos de 5 s, que los contadores cuadren, que lo pendiente esté en el libro o en una mochila, y
+verifica el log con `check_log.py`. Es la prueba que se corre bajo ThreadSanitizer para buscar
+carreras en el traspaso y las averías simultáneas.
+
 ## Dependencias
 
 - cmake ≥ 3.11

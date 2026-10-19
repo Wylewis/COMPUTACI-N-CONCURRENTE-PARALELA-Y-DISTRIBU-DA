@@ -163,6 +163,19 @@ cierra la ventana o se pulsa `q` o Esc. El dibujo no toca ningún dato compartid
 OpenCV es opcional en la compilación: si CMake no lo encuentra, `delivery_sim` se construye sin
 ventana (`HAVE_OPENCV` no definido) y el resto funciona igual.
 
+### Contadores en vivo
+
+El módulo `live_counters` guarda los contadores en vivo de cada moto (entregas, recogidas, averías)
+en una estructura alineada a su propia línea de caché (`alignas(128)`, el tamaño de línea de Apple
+Silicon, que cubre también los 64 bytes de x86). Cada hilo de moto incrementa solo los suyos con
+`fetch_add` relajado, y la ventana los lee cuando quiere con `snapshot`. Sin la alineación, los
+contadores de motos vecinas compartirían línea y cada incremento de una invalidaría la línea de la
+otra (false sharing): la prueba mide ambas disposiciones con ocho hilos. La flota es dueña de los
+contadores y se los da a cada hilo antes de arrancar. `main` arma por cuadro los contadores de la
+sección 6.3 (creados y rechazados del generador, asignados y sin repartidor de los despachadores,
+recogidos, entregados y averías de la flota, pendientes por diferencia) y la ventana los muestra en
+la segunda línea de la banda superior.
+
 ### Capa viva de la flota
 
 El módulo `fleet_view` dibuja sobre un cuadro de la ventana lo que cambia: cada moto como un círculo

@@ -1,17 +1,20 @@
 #include "fleet.h"
 
+#include <algorithm>
+
 #include <optional>
 
 #include "dispatch_select.h"
 
 Fleet::Fleet(const FleetConfig& cfg, const Graph& graph, Restaurants& restaurants, EventLogger& logger,
              const SimClock& clock, StopSignal& stop)
-    : graph_(graph), restaurants_(restaurants), stop_(stop) {
+    : counters_(static_cast<std::size_t>(std::max(0, cfg.couriers))), graph_(graph), restaurants_(restaurants), stop_(stop) {
     for (const std::string& id : courierIds(cfg.couriers)) {
         index_[id] = couriers_.size();
         couriers_.push_back(std::make_unique<Courier>(id, cfg.startNode, cfg.bagCapacity));
         threads_.push_back(std::make_unique<CourierThread>(*couriers_.back(), graph, restaurants, cfg.speedKmh, logger,
                                                            clock, stop));
+        threads_.back()->counters(&counters_.at(couriers_.size() - 1));
         threads_.back()->onFreed([this] { freed(); });
         threads_.back()->onRescueNeeded([this](const std::string& id) { rescue(id); });
     }

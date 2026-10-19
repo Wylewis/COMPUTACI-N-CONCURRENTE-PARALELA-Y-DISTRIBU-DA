@@ -24,6 +24,12 @@ void drawCouriers(cv::Mat& frame, const MapProjection& proj, const Graph& graph,
                   const std::vector<CourierView>& fleet, std::int64_t nowMs);
 void drawStatePanel(cv::Mat& frame, const std::vector<CourierView>& fleet, std::int64_t nowMs);
 
+// Contadores de la seccion 6.3 para el panel; los arma main desde los contadores en vivo.
+struct PanelStats {
+    std::int64_t created = 0, assigned = 0, pickedUp = 0, delivered = 0, rejected = 0, breakdowns = 0, pending = 0;
+};
+void drawCountersPanel(cv::Mat& frame, const PanelStats& stats);  // segunda linea de la banda superior
+
 // Todo lo anterior en orden: puntos de entrega, motos, panel.
 void drawFleet(cv::Mat& frame, const MapProjection& proj, const Graph& graph,
                const std::vector<CourierView>& fleet, std::int64_t nowMs);

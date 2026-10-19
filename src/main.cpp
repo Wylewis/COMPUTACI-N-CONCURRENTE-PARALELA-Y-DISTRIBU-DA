@@ -132,6 +132,14 @@ int main(int argc, char** argv) {
             while (!stop.requested() && (durationMs == 0 || clock.nowMs() < durationMs)) {
                 cv::Mat frame = window.frame();
                 drawFleet(frame, window.projection(), graph, fleet.views(), clock.nowMs());
+                PanelStats st;
+                st.created = generatorThread.created();
+                st.rejected = generatorThread.rejected();
+                for (const auto& d : dispatchers) st.assigned += d->assigned(), st.rejected += d->rejected();
+                const CountersSnapshot live = fleet.counters().snapshot();
+                st.pickedUp = live.pickedUp, st.delivered = live.delivered, st.breakdowns = live.breakdowns;
+                st.pending = st.created - st.delivered - st.rejected;
+                drawCountersPanel(frame, st);
                 if (!window.show(frame, 33)) {
                     windowClosed = true;
                     break;

@@ -16,6 +16,7 @@
 #include "courier_thread.h"
 #include "event_logger.h"
 #include "graph.h"
+#include "live_counters.h"
 #include "restaurants.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
@@ -49,6 +50,7 @@ public:
     void rescue(const std::string& brokenId);
     std::int64_t rescues() const;
     std::int64_t delivered() const;
+    const LiveCounters& counters() const { return counters_; }  // en vivo, un contador por moto
 
     std::uint64_t version() const;
     void waitForChange(std::uint64_t seen);  // hasta version != seen o parada
@@ -58,6 +60,7 @@ public:
 private:
     void freed();
 
+    LiveCounters counters_;
     std::vector<std::unique_ptr<Courier>> couriers_;
     std::vector<std::unique_ptr<CourierThread>> threads_;
     std::unordered_map<std::string, std::size_t> index_;

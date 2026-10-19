@@ -49,6 +49,12 @@ int main() {
     check(isColor(frame.at<cv::Vec3b>(97, 203), {200, 0, 200}), "el punto de entrega de c1 (C) se marca en el nodo");
     check(isColor(frame.at<cv::Vec3b>(1, 1), {255, 255, 255}) && !isColor(frame.at<cv::Vec3b>(11, 76), {255, 255, 255}),
           "el panel de estados ocupa la banda superior con sus marcas");
+    PanelStats st;
+    st.created = 12, st.delivered = 3, st.pending = 9;
+    drawCountersPanel(frame, st);
+    int dark = 0;
+    for (int x = 0; x < frame.cols; ++x) dark += !isColor(frame.at<cv::Vec3b>(33, x), {255, 255, 255});
+    check(isColor(frame.at<cv::Vec3b>(24, 1), {255, 255, 255}) && dark > 50, "la segunda linea de la banda lleva los contadores");
 
     if (failures == 0) {
         std::cout << "fleet_view_test: todas las pruebas pasaron\n";

@@ -30,7 +30,8 @@ int main() {
     SimClock clock(1000.0);
     StopSignal stop;
     EventLogger logger(path, Fleet::courierIds(3));
-    Fleet fleet(cfg.fleet, g, cfg.restaurants, logger, clock, stop);
+    Restaurants restaurants(cfg.restaurants);
+    Fleet fleet(cfg.fleet, g, restaurants, logger, clock, stop);
     check(Fleet::courierIds(3) == std::vector<std::string>{"c0", "c1", "c2"} && fleet.size() == 3, "ids c0..c2");
 
     const auto snaps = fleet.snapshots(0);

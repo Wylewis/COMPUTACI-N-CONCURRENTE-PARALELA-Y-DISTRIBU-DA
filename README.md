@@ -132,6 +132,11 @@ espera prevista de cada uno en la fila con un scan exclusivo de los tiempos de s
 entre los puestos, y `snapshot` copia la fila para la ventana. El `scan` de `scan.h` pasa a ser
 genérico para servir tanto a posiciones como a tiempos.
 
+### Registro de restaurantes
+
+`restaurants` guarda un `Restaurant` por entrada de la configuración, por id, y despierta a todos al
+parar. El hilo de la moto y la flota lo reciben por referencia.
+
 ### Flota
 
 El módulo `fleet` agrupa las motos y sus hilos: crea `couriers` repartidores `c0…cN-1` en el nodo de
@@ -157,9 +162,11 @@ copias frescas. Al pedir parar devuelve al libro el pedido que tenía en la mano
 El módulo `courier_thread` es el hilo de cada moto. Sin pedidos duerme en su propia variable de
 condición, sin consumir CPU; `assign` reserva el pedido, publica `orderAssigned` y lo despierta,
 todo bajo el mutex del hilo para que ningún evento posterior del pedido se adelante en el log. Con
-pedidos, va al restaurante del más antiguo, recoge los que lleva de ese restaurante (espera a que
-estén listos más 60 s simulados de mostrador) y entrega los recogidos empezando por el destino más
-cercano por calles, con 60 s en la puerta. Cada tramo y cada espera es un `StopSignal::waitUntil`
+pedidos, va al restaurante del más antiguo, espera fuera de la fila a que estén listos los que lleva
+de ese restaurante, hace fila por un puesto de recogida (`Queued`), recoge uno a uno con 60 s
+simulados de mostrador cada uno (`PickingUp`) y suelta el puesto; después entrega los recogidos
+empezando por el destino más cercano por calles, con 60 s en la puerta. El puesto se devuelve
+también si la parada interrumpe la recogida (RAII). Cada tramo y cada espera es un `StopSignal::waitUntil`
 sobre el instante simulado: no hay sondeo y la parada lo interrumpe en el acto, dejándolo en el
 último nodo alcanzado. La fila y los puestos de recogida llegan con el monitor del restaurante.
 

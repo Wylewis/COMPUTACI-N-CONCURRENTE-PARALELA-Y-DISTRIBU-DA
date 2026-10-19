@@ -120,6 +120,11 @@ y en empate el id menor, para que el resultado sea determinista). El primer anil
 estimación válida decide: una moto más rápida pero más lejana no se considera, que es la regla de
 los apuntes. Cada moto se estima una sola vez porque los anillos son disjuntos. El resultado trae
 el radio, los anillos recorridos y cuántas estimaciones costó, para los experimentos.
+El map de cada anillo es intercambiable: `selectCourier` acepta un `Mapper`, y `estimateAllAsync`
+es el concurrente: una tarea por candidato con `std::async(launch::async)`, espera de los resultados
+hasta `dispatch.quoteTimeoutMs` (tiempo real), las que llegan tarde se ignoran y una estimación que
+lanza `EstimateError` se descarta como error, sin tumbar al despachador. El despachador usa este map
+y cuenta las tardías.
 
 ### Restaurante
 

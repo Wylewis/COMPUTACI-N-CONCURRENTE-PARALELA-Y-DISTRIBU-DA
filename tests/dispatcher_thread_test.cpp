@@ -31,6 +31,7 @@ Config lineCity(int couriers) {
     cfg.fleet = {couriers, 1, 36.0, "A"};
     cfg.orders.maxPending = 10;
     cfg.dispatch.acceptTimeoutMs = 3'600'000;
+    cfg.dispatch.quoteTimeoutMs = 200;
     return cfg;
 }
 
@@ -68,7 +69,7 @@ struct Rig {
         cfg.dispatch.acceptTimeoutMs = acceptMs;
         for (int r : which)
             dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0,
-                                                                      cfg.dispatch.acceptTimeoutMs, logger, clock, stop));
+                                                                      cfg.dispatch, logger, clock, stop));
         clock.start();
         fleet.start();
         for (auto& d : dispatchers) d->start();

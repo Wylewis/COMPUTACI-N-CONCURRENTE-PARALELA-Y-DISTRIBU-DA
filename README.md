@@ -11,7 +11,8 @@ cmake .. && make
 ./delivery_sim ../config/equipetrol.json
 ```
 
-El único flag opcional es `--log <ruta>`, que cambia el archivo del log de eventos (por defecto `events.log`).
+Los flags opcionales son `--log <ruta>`, que cambia el archivo del log de eventos (por defecto
+`events.log`), y `--no-window`, que corre sin la ventana del mapa (es lo que usan las pruebas).
 
 ### Validación del archivo de configuración
 
@@ -223,7 +224,12 @@ primero. El apagado es ordenado: se pide parar; se une el generador (nadie crea 
 registra `simulationStopping`; se cierra el libro, con lo que los despachadores devuelven el pedido
 que tuvieran en la mano y terminan; la flota saca a las motos de filas y viajes y las une; lo que
 quedó en el libro y en las mochilas cuenta como `pending`; se cierra el log y se imprime el resumen.
-Todas las esperas son sobre variables de condición o sobre la señal de parada: no hay sondeo.
+Con ventana (la opción por defecto cuando se compiló con OpenCV), el hilo principal dibuja un cuadro
+por iteración (`MapWindow::frame`, la capa viva de `fleet_view` desde `Fleet::views`) y espera unos
+33 ms entre cuadros: esa es la única pausa periódica del programa y solo regula la tasa de cuadros.
+Cerrar la ventana o pulsar `q` o Esc pide la parada ordenada igual que una señal. Con `--no-window`
+el hilo principal espera dormido en la señal de parada hasta el fin, y así corren las pruebas.
+Todas las demás esperas son sobre variables de condición o sobre la señal de parada: no hay sondeo.
 
 ### Generación de pedidos
 

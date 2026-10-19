@@ -18,16 +18,21 @@
 #include "sim_clock.h"
 #include "stop_signal.h"
 #include "thread_pool.h"
+#ifdef HAVE_OPENCV
+#include "fleet_view.h"
+#include "window.h"
+#endif
 
 namespace {
 
 struct Options {
     std::string configPath;
     std::string logPath = "events.log";
+    bool window = true;
 };
 
 void printUsage(std::ostream& out) {
-    out << "Uso: delivery_sim <config.json> [--log <ruta>]\n";
+    out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window]\n";
 }
 
 bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
@@ -44,6 +49,8 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
                 return false;
             }
             opts.logPath = argv[++i];
+        } else if (arg == "--no-window") {
+            opts.window = false;
         } else {
             error = "argumento desconocido: " + arg;
             return false;
@@ -113,8 +120,25 @@ int main(int argc, char** argv) {
         generatorThread.start();
         std::cout << kStartLine << std::endl;
 
-        // Esperar el fin: por tiempo simulado cumplido o por senal, lo que ocurra primero.
+        // Esperar el fin: por tiempo simulado cumplido, por senal, o porque se
+        // cerro la ventana, lo que ocurra primero. Con ventana, el hilo principal
+        // dibuja un cuadro y espera unos milisegundos entre cuadros: esa es la
+        // unica pausa periodica del programa, y solo regula la tasa de cuadros.
         const std::int64_t durationMs = config.simulation.durationS * 1000;
+        bool windowClosed = false;
+#ifdef HAVE_OPENCV
+        if (opts.window) {
+            MapWindow window(config, graph);
+            while (!stop.requested() && (durationMs == 0 || clock.nowMs() < durationMs)) {
+                cv::Mat frame = window.frame();
+                drawFleet(frame, window.projection(), graph, fleet.views(), clock.nowMs());
+                if (!window.show(frame, 33)) {
+                    windowClosed = true;
+                    break;
+                }
+            }
+        } else
+#endif
         if (durationMs > 0) {
             stop.waitUntil(clock.realTimeFor(durationMs));
         } else {
@@ -139,7 +163,8 @@ int main(int argc, char** argv) {
 
         std::int64_t assigned = 0, rejectedNoCourier = 0, retries = 0;
         for (const auto& d : dispatchers) assigned += d->assigned(), rejectedNoCourier += d->rejected(), retries += d->retries();
-        std::cerr << "delivery_sim: parada por " << (bySignal ? "senal" : "tiempo cumplido") << " a los "
+        std::cerr << "delivery_sim: parada por "
+                  << (bySignal ? "senal" : windowClosed ? "ventana cerrada" : "tiempo cumplido") << " a los "
                   << clock.nowMs() << " ms simulados; " << generatorThread.batches() << " rafagas, "
                   << generatorThread.created() << " pedidos creados, " << generatorThread.rejected()
                   << " rechazados al crear, " << assigned << " asignados (" << retries << " reintentos), "

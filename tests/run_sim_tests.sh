@@ -63,7 +63,7 @@ check_run() {
 }
 
 # 1. Termina por tiempo cumplido
-"$bin" "$work/short.json" --log "$work/tiempo.log" > "$work/tiempo.out" 2> "$work/tiempo.err"
+"$bin" "$work/short.json" --no-window --log "$work/tiempo.log" > "$work/tiempo.out" 2> "$work/tiempo.err"
 check_run "tiempo_cumplido" $? "$work/tiempo.out" "$work/tiempo.log" "$work/short.json"
 created=$(grep -c '"orderCreated"' "$work/tiempo.log")
 if [ "$created" -lt 5 ]; then
@@ -75,7 +75,7 @@ fi
 
 # 1b. Ciclo completo: entregas, averias, liberaciones y rescates reales, y el
 #     resumen cuadra con el log (lo comprueba check_log con --summary)
-"$bin" "$work/full.json" --log "$work/full.log" > "$work/full.out" 2> "$work/full.err"
+"$bin" "$work/full.json" --no-window --log "$work/full.log" > "$work/full.out" 2> "$work/full.err"
 check_run "ciclo_completo" $? "$work/full.out" "$work/full.log" "$work/full.json"
 for needle in orderDelivered courierBreakdown orderReassigned pickupStarted; do
     if ! grep -q "\"$needle\"" "$work/full.log"; then
@@ -91,7 +91,7 @@ if grep -q " 0 rescates" "$work/full.err"; then
 fi
 
 # 2. Termina por SIGINT, en menos de 5 segundos reales
-"$bin" "$work/forever.json" --log "$work/senal.log" > "$work/senal.out" 2> "$work/senal.err" &
+"$bin" "$work/forever.json" --no-window --log "$work/senal.log" > "$work/senal.out" 2> "$work/senal.err" &
 pid=$!
 sleep 1
 start=$(date +%s)
@@ -105,7 +105,7 @@ if [ "$elapsed" -gt 5 ]; then
 fi
 
 # 3. Termina por SIGTERM
-"$bin" "$work/forever.json" --log "$work/term.log" > "$work/term.out" 2> "$work/term.err" &
+"$bin" "$work/forever.json" --no-window --log "$work/term.log" > "$work/term.out" 2> "$work/term.err" &
 pid=$!
 sleep 1
 kill -TERM "$pid"

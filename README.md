@@ -153,6 +153,16 @@ cierra la ventana o se pulsa `q` o Esc. El dibujo no toca ningún dato compartid
 OpenCV es opcional en la compilación: si CMake no lo encuentra, `delivery_sim` se construye sin
 ventana (`HAVE_OPENCV` no definido) y el resto funciona igual.
 
+### Capa viva de la flota
+
+El módulo `fleet_view` dibuja sobre un cuadro de la ventana lo que cambia: cada moto como un círculo
+con el color de su estado (gris inactiva, azul yendo al restaurante, amarillo en fila, naranja
+recogiendo, verde entregando, rojo averiada) y la etiqueta `id ocupados/capacidad`; su posición sale
+del viaje compartido (`RouteMotion::positionAt`) si está en uno, o de su nodo si no; los puntos de
+entrega de los pedidos que lleva, como cuadrados magenta; y una banda superior con el tiempo
+simulado y el conteo de motos por estado. Todo a partir de `CourierView`, la copia que da la flota:
+el dibujo no toma ningún cerrojo ni interpola nada que no esté ya en la copia.
+
 ### Registro de restaurantes
 
 `restaurants` guarda un `Restaurant` por entrada de la configuración, por id, y despierta a todos al

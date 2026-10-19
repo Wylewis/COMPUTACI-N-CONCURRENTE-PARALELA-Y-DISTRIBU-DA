@@ -359,6 +359,24 @@ menos de 5 s, que los contadores cuadren, que lo pendiente esté en el libro o e
 verifica el log con `check_log.py`. Es la prueba que se corre bajo ThreadSanitizer para buscar
 carreras en el traspaso y las averías simultáneas.
 
+## Experimentos
+
+`tools/run_experiments.py` corre `delivery_sim` con varias configuraciones derivadas de una base, en
+procesos paralelos, y agrega los resultados en una tabla Markdown con el JSON crudo al lado:
+
+```sh
+python3 tools/run_experiments.py --bin build/delivery_sim --config config/equipetrol.json \
+    --vary fleet.bagCapacity=1,2,3,4 --seeds 42,7,2024 --duration 1800 --scale 600 \
+    --jobs 4 --out tools/reports/exp_bag.md
+```
+
+`--vary` toma una ruta de clave del config y los valores a probar, y se puede repetir para combinar
+varias claves; `--set` fija otras claves en todas las corridas. Cada combinación se corre una vez
+por semilla, con `--no-window`; de cada corrida se toman el resumen final, el mensaje de cierre
+(asignados, reintentos, estimaciones tardías, averías, rescates) y el tiempo real, y el log se
+verifica con `check_log.py`. La tabla muestra las medias por configuración y cuántas corridas
+terminaron bien; `ctest` incluye una corrida mínima del corredor.
+
 ## Dependencias
 
 - cmake ≥ 3.11

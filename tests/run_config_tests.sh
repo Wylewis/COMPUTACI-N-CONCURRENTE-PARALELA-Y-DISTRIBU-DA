@@ -49,7 +49,7 @@ c["simulation"]["durationS"] = 1
 c["simulation"]["timeScale"] = 1000
 json.dump(c, open(dst, "w"))
 EOF
-    out=$("$bin" "$work/$name" --log "$work/$name.log" 2>"$work/$name.err")
+    out=$("$bin" "$work/$name" --no-window --log "$work/$name.log" 2>"$work/$name.err")
     status=$?
     if [ "$status" -eq 0 ] && [ "$(printf '%s' "$out" | head -n 1)" = "Simulation has started..." ]; then
         echo "ok     $name -> cargado y simulado 1 s"

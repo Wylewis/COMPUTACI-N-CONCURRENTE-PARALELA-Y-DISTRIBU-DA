@@ -176,7 +176,13 @@ pedidos, va al restaurante del más antiguo, espera fuera de la fila a que esté
 de ese restaurante, hace fila por un puesto de recogida (`Queued`), recoge uno a uno con 60 s
 simulados de mostrador cada uno (`PickingUp`) y suelta el puesto; después entrega los recogidos
 empezando por el destino más cercano por calles, con 60 s en la puerta. El puesto se devuelve
-también si la parada interrumpe la recogida (RAII). Cada tramo y cada espera es un `StopSignal::waitUntil`
+también si la parada interrumpe la recogida (RAII). Si el sorteo de averías toca en un
+tramo, al terminar ese tramo la moto queda `BrokenDown` en el nodo, publica `courierBreakdown`,
+devuelve los pedidos aún no recogidos (sus reservas se liberan y vuelven al libro para que otro
+los tome, lo que se registra como `orderReassigned` al asignarse de nuevo), espera `kRepairMs` y
+vuelve al servicio avisando a la flota. Una moto averiada no se considera en la selección: la copia
+para estimar la marca como tal. Los pedidos ya recogidos quedan en su mochila hasta que se repara;
+el traspaso a otra moto llega en el PR siguiente. Cada tramo y cada espera es un `StopSignal::waitUntil`
 sobre el instante simulado: no hay sondeo y la parada lo interrumpe en el acto, dejándolo en el
 último nodo alcanzado. La fila y los puestos de recogida llegan con el monitor del restaurante.
 

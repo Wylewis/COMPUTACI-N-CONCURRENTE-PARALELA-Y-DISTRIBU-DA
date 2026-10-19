@@ -1,6 +1,9 @@
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <mutex>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -139,6 +142,49 @@ int main() {
         }
         check(t0.delivered() + t1.delivered() == 2 && secondStarted >= firstPickedUp && restaurants.at("r0").served() == 2,
               "con un puesto, la segunda recogida empieza cuando termina la primera");
+    }
+    {   // averia: c0 (probabilidad 1) se averia en el tramo, libera el pedido, se repara; c1 lo recibe reasignado
+        std::remove(path.c_str());
+        SimClock clock(1000.0);
+        StopSignal stop;
+        EventLogger logger(path, {"e0", "e1"});
+        Restaurants restaurants(cfg.restaurants);
+        Courier c0("e0", "A", 1), c1("e1", "A", 1);
+        CourierThread t0(c0, g, restaurants, 36.0, logger, clock, stop), t1(c1, g, restaurants, 36.0, logger, clock, stop);
+        std::vector<Order> released;
+        std::mutex m;
+        t0.enableBreakdowns(7, 0, 1.0);
+        t0.onReleased([&](Order o) { std::lock_guard<std::mutex> lock(m); released.push_back(std::move(o)); });
+        std::atomic<int> freed{0};
+        t0.onFreed([&] { ++freed; });
+        clock.start();
+        t0.start(), t1.start();
+        Order o = created("o", "C", logger);
+        t0.assign(o);
+        for (int i = 0; i < 200 && t0.breakdowns() < 1; ++i) std::this_thread::sleep_for(milliseconds(5));
+        std::this_thread::sleep_for(milliseconds(20));
+        Order back;
+        bool releasedOk;
+        {
+            std::lock_guard<std::mutex> lock(m);
+            releasedOk = released.size() == 1 && released[0].courierId == "e0";
+            if (releasedOk) back = std::move(released[0]);
+        }
+        check(t0.breakdowns() == 1 && releasedOk && c0.state() == CourierState::BrokenDown && c0.bagCount() == 0 &&
+                  c0.node() == "B" && c0.estimateSnapshot(0).broken,
+              "se averia al final del tramo, libera el pedido reservado y queda averiada y marcada en el nodo");
+        check(releasedOk && t1.assign(back) && deliversAll(t1, 1), "otra moto recibe el pedido liberado y lo entrega");
+        for (int i = 0; i < 200 && freed < 1; ++i) std::this_thread::sleep_for(milliseconds(5));
+        check(freed == 1 && c0.state() == CourierState::Idle, "tras kRepairMs vuelve al servicio y avisa a la flota");
+        stop.request();
+        t0.join(), t1.join();
+        logger.close();
+        const auto ev = events(path);
+        const bool hasBreak = std::find(ev.begin(), ev.end(), std::make_pair(std::string("courierBreakdown"), std::string())) != ev.end();
+        const bool hasReassign = std::find(ev.begin(), ev.end(), std::make_pair(std::string("orderReassigned"), std::string("o"))) != ev.end();
+        const Summary sm = logger.summary();
+        check(hasBreak && hasReassign && sm.breakdowns == 1 && sm.reassigned == 1 && sm.delivered == 1,
+              "el log tiene courierBreakdown y orderReassigned y el resumen los cuenta");
     }
     std::remove(path.c_str());
 

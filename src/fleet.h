@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -39,6 +40,9 @@ public:
     std::vector<CourierSnapshot> snapshots(std::int64_t nowMs) const;
     std::vector<CourierView> views() const;
     bool assign(const std::string& courierId, Order& order);
+    // Antes de start(): averias con la probabilidad de la configuracion, y a quien devolver los pedidos liberados.
+    void enableBreakdowns(const IncidentsConfig& incidents, std::uint64_t seed, std::function<void(Order)> release);
+    std::int64_t breakdowns() const;
     std::int64_t delivered() const;
 
     std::uint64_t version() const;

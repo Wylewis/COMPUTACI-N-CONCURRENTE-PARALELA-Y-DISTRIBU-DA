@@ -17,6 +17,11 @@ hara el programa de los evaluadores:
   - un pedido tiene un solo repartidor a la vez: los eventos de recogida y
     entrega llevan al repartidor actual, y orderReassigned pasa de `from`
     (el actual) a `to` (otro distinto);
+  - courierBreakdown libera las reservas no recogidas de ese repartidor: esos
+    pedidos salen de su mochila y quedan liberados hasta que otro repartidor
+    los tome (orderReassigned desde el que los libero) o el mismo los retome
+    al repararse (orderAssigned); los ya recogidos siguen en su mochila hasta
+    el traspaso;
   - con --config: ningun repartidor lleva mas de bagCapacity pedidos a la vez
     (asignados o recogidos y no entregados), y en ningun restaurante hay mas
     repartidores recogiendo (entre pickupStarted y orderPickedUp) que
@@ -120,6 +125,14 @@ def check(lines, summary=None, config=None):
             stopping_seen = True
             continue
         if kind == "courierBreakdown":
+            # La averia libera las reservas no recogidas: salen de la mochila y
+            # quedan "released" hasta que otra moto los tome (orderReassigned)
+            # o la misma los retome al repararse (orderAssigned).
+            c = e["courier"]
+            for released in sorted(bag[c]):
+                if state[released] == "assigned":
+                    bag[c].discard(released)
+                    state[released] = "released"
             continue
 
         order = e["order"]
@@ -149,10 +162,14 @@ def check(lines, summary=None, config=None):
             continue
 
         if kind == "orderAssigned":
-            if current != "created":
+            c = e["courier"]
+            if current == "released":
+                if c != courier_of.get(order):
+                    err(lineno, f"pedido {order}: liberado por {courier_of.get(order)} y asignado a {c}: debe ser orderReassigned")
+                    continue
+            elif current != "created":
                 err(lineno, f"pedido {order}: orderAssigned desde {current}, se esperaba created")
                 continue
-            c = e["courier"]
             state[order] = "assigned"
             courier_of[order] = c
             bag[c].add(order)
@@ -207,7 +224,7 @@ def check(lines, summary=None, config=None):
             delivery_times.append(t - created_at[order])
 
         elif kind == "orderReassigned":
-            if current not in ("assigned", "collecting", "pickedUp"):
+            if current not in ("assigned", "collecting", "pickedUp", "released"):
                 err(lineno, f"pedido {order}: orderReassigned desde {current}")
                 continue
             src, dst = e["from"], e["to"]
@@ -222,6 +239,7 @@ def check(lines, summary=None, config=None):
                 err(lineno, f"repartidor {dst} lleva {len(bag[dst])} pedidos tras el traspaso, capacidad {bag_capacity}")
             if current == "collecting":
                 collecting[restaurant_of[order]].discard(src)
+            if current in ("collecting", "released"):
                 state[order] = "assigned"
 
     pending = [o for o, s in state.items() if s not in FINAL]

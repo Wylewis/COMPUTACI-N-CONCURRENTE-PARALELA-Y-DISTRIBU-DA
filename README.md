@@ -132,6 +132,16 @@ espera prevista de cada uno en la fila con un scan exclusivo de los tiempos de s
 entre los puestos, y `snapshot` copia la fila para la ventana. El `scan` de `scan.h` pasa a ser
 genérico para servir tanto a posiciones como a tiempos.
 
+### Sorteo de averías
+
+El módulo `breakdown` decide si una moto se avería en un viaje. Cada moto tiene su propio generador,
+derivado de la semilla global y de su índice con `std::seed_seq`, así el sorteo no comparte estado
+entre hilos y la misma semilla reproduce las mismas averías para el mismo ritmo de viajes. Se
+sortea una vez por viaje con `incidents.breakdownProbability` y, si toca, un tramo del viaje al
+azar donde ocurre, para que la avería caiga "en un punto aleatorio del trayecto". Una moto averiada
+vuelve al servicio tras `kRepairMs` (5 min simulados), un valor fijo porque la configuración del
+enunciado no lo contempla. La avería en el hilo de la moto llega en el PR siguiente.
+
 ### Registro de restaurantes
 
 `restaurants` guarda un `Restaurant` por entrada de la configuración, por id, y despierta a todos al

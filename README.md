@@ -333,6 +333,13 @@ averías simultáneas, verifica cada log con `check_log.py` y cierra con el cont
 sanitizer, de salidas con error y de logs con errores. Sale con 1 si cualquiera de los tres no es
 cero. El reporte comprometido en el repositorio es la evidencia de la sección 11.
 
+`tools/run_asan_linux.sh` hace lo mismo para la memoria, en Linux dentro de Docker, porque
+LeakSanitizer no existe en macOS con Apple Silicon: construye la imagen de `tools/docker/Dockerfile.asan`
+(Debian con `g++`, CMake y Python, sin OpenCV), compila el proyecto con `-DENABLE_ASAN=ON` en el
+contenedor con el repositorio montado en solo lectura, corre toda la suite de `ctest` y los mismos
+tres pasos con `ASAN_OPTIONS=detect_leaks=1`, y guarda `tools/reports/asan_linux_<fecha>.txt`
+con el conteo de errores del sanitizer, de salidas con error y de logs con errores.
+
 Pruebas unitarias (se construyen con `make` dentro de `build/`):
 
 ```sh

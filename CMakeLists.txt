@@ -291,6 +291,7 @@ add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
 # Integracion: corridas completas por tiempo cumplido, SIGINT y SIGTERM,
 # verificadas con el verificador del log.
+add_test(NAME experiments_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_experiments_test.sh $<TARGET_FILE:delivery_sim>)
 add_test(NAME sim_tests COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_sim_tests.sh $<TARGET_FILE:delivery_sim>)
 
 # Verificador del log de eventos (Python 3, solo libreria estandar)

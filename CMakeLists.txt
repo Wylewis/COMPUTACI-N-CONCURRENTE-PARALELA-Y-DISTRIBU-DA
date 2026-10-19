@@ -210,6 +210,17 @@ target_link_libraries(fleet_test PRIVATE Threads::Threads)
 apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
 
+add_executable(breakdown_stress_test tests/breakdown_stress_test.cpp
+  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
+  src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
+target_include_directories(breakdown_stress_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(breakdown_stress_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(breakdown_stress_test PRIVATE -Wall -Wextra)
+target_link_libraries(breakdown_stress_test PRIVATE Threads::Threads)
+apply_sanitizers(breakdown_stress_test)
+add_test(NAME stress_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_stress_test.sh $<TARGET_FILE:breakdown_stress_test>)
+
 add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
   src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp

@@ -14,6 +14,7 @@
 #include "courier_thread.h"
 #include "event_logger.h"
 #include "graph.h"
+#include "restaurants.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
 
@@ -22,15 +23,15 @@
 // no encontro moto duerme en waitForChange hasta que la flota cambie.
 class Fleet {
 public:
-    Fleet(const FleetConfig& cfg, const Graph& graph, const std::vector<RestaurantConfig>& restaurants,
-          EventLogger& logger, const SimClock& clock, StopSignal& stop);
+    Fleet(const FleetConfig& cfg, const Graph& graph, Restaurants& restaurants, EventLogger& logger,
+          const SimClock& clock, StopSignal& stop);
     Fleet(const Fleet&) = delete;
     Fleet& operator=(const Fleet&) = delete;
 
     static std::vector<std::string> courierIds(int couriers);  // c0..c(n-1)
 
     void start();
-    void join();  // despues de stop.request()
+    void join();  // despues de stop.request(): saca a las motos de las filas y las une
     void wake();  // despierta a los despachadores dormidos en waitForChange
 
     std::size_t size() const { return couriers_.size(); }
@@ -51,6 +52,7 @@ private:
     std::vector<std::unique_ptr<Courier>> couriers_;
     std::vector<std::unique_ptr<CourierThread>> threads_;
     std::unordered_map<std::string, std::size_t> index_;
+    Restaurants& restaurants_;
     StopSignal& stop_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;

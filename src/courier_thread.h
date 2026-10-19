@@ -7,22 +7,23 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 #include "config.h"
 #include "courier.h"
 #include "event_logger.h"
 #include "graph.h"
+#include "restaurants.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
 
-// El hilo de una moto: duerme en su cv sin pedidos; con pedidos recoge en el
-// restaurante y entrega el destino mas cercano primero, tramo a tramo.
+// El hilo de una moto: duerme en su cv sin pedidos; con pedidos va al
+// restaurante, espera la preparacion fuera de la fila, hace fila por un puesto,
+// recoge, y entrega el destino mas cercano primero, tramo a tramo.
 class CourierThread {
 public:
-    CourierThread(Courier& courier, const Graph& graph, const std::vector<RestaurantConfig>& restaurants,
-                  double speedKmh, EventLogger& logger, const SimClock& clock, StopSignal& stop);
+    CourierThread(Courier& courier, const Graph& graph, Restaurants& restaurants, double speedKmh,
+                  EventLogger& logger, const SimClock& clock, StopSignal& stop);
     ~CourierThread();
     CourierThread(const CourierThread&) = delete;
     CourierThread& operator=(const CourierThread&) = delete;
@@ -39,13 +40,13 @@ private:
     bool serveBag();  // false si se pidio parar
     std::vector<BagItem> items();
     bool travelTo(const std::string& node, CourierState moving);  // false si parada o sin ruta
-    bool pickUp(const BagItem& item);
+    bool pickUpAt(const std::string& restaurantId, const std::vector<BagItem>& bag);  // espera, fila, puesto, recogida
     bool deliver(const std::string& orderId);
     bool waitSim(std::int64_t simMs);  // false si se pidio parar
 
     Courier& courier_;
     const Graph& graph_;
-    std::unordered_map<std::string, std::string> restaurantNode_;
+    Restaurants& restaurants_;
     const double speedKmh_;
     EventLogger& logger_;
     const SimClock& clock_;

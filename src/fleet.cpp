@@ -1,8 +1,8 @@
 #include "fleet.h"
 
-Fleet::Fleet(const FleetConfig& cfg, const Graph& graph, const std::vector<RestaurantConfig>& restaurants,
-             EventLogger& logger, const SimClock& clock, StopSignal& stop)
-    : stop_(stop) {
+Fleet::Fleet(const FleetConfig& cfg, const Graph& graph, Restaurants& restaurants, EventLogger& logger,
+             const SimClock& clock, StopSignal& stop)
+    : restaurants_(restaurants), stop_(stop) {
     for (const std::string& id : courierIds(cfg.couriers)) {
         index_[id] = couriers_.size();
         couriers_.push_back(std::make_unique<Courier>(id, cfg.startNode, cfg.bagCapacity));
@@ -24,6 +24,7 @@ void Fleet::start() {
 
 void Fleet::join() {
     wake();
+    restaurants_.wake();
     for (auto& t : threads_) t->join();
 }
 

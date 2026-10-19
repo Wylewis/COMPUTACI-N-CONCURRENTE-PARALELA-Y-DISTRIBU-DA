@@ -6,11 +6,10 @@
 #include "estimate.h"
 #include "route_motion.h"
 
-CourierThread::CourierThread(Courier& courier, const Graph& graph, const std::vector<RestaurantConfig>& restaurants,
-                             double speedKmh, EventLogger& logger, const SimClock& clock, StopSignal& stop)
-    : courier_(courier), graph_(graph), speedKmh_(speedKmh), logger_(logger), clock_(clock), stop_(stop) {
-    for (const RestaurantConfig& r : restaurants) restaurantNode_[r.id] = r.node;
-}
+CourierThread::CourierThread(Courier& courier, const Graph& graph, Restaurants& restaurants, double speedKmh,
+                             EventLogger& logger, const SimClock& clock, StopSignal& stop)
+    : courier_(courier), graph_(graph), restaurants_(restaurants), speedKmh_(speedKmh), logger_(logger), clock_(clock),
+      stop_(stop) {}
 
 CourierThread::~CourierThread() { join(); }
 
@@ -58,9 +57,8 @@ bool CourierThread::serveBag() {
                                         [](const BagItem& b) { return b.state == OrderState::Assigned; });
         if (first != bag.end()) {
             const std::string restaurant = first->restaurantId;
-            if (!travelTo(restaurantNode_.at(restaurant), CourierState::ToRestaurant)) return !stop_.requested();
-            for (const BagItem& b : bag)
-                if (b.state == OrderState::Assigned && b.restaurantId == restaurant && !pickUp(b)) return false;
+            if (!travelTo(restaurants_.at(restaurant).node(), CourierState::ToRestaurant)) return !stop_.requested();
+            if (!pickUpAt(restaurant, bag)) return false;
             continue;
         }
         const auto next = courier_.nearestDelivery(graph_);
@@ -94,13 +92,31 @@ bool CourierThread::travelTo(const std::string& node, CourierState moving) {
     return true;
 }
 
-bool CourierThread::pickUp(const BagItem& item) {
+bool CourierThread::pickUpAt(const std::string& restaurantId, const std::vector<BagItem>& bag) {
+    std::vector<BagItem> mine;
+    std::int64_t readyMs = 0;
+    for (const BagItem& b : bag)
+        if (b.state == OrderState::Assigned && b.restaurantId == restaurantId) {
+            mine.push_back(b);
+            readyMs = std::max(readyMs, b.readyAtMs);
+        }
+    if (!waitSim(readyMs)) return false;  // la preparacion se espera fuera de la fila
+
+    Restaurant& r = restaurants_.at(restaurantId);
+    r.enterQueue(courier_.id());
+    courier_.setState(CourierState::Queued);
+    if (!r.waitForSlot(courier_.id(), stop_)) return false;
+    struct SlotGuard {  // el puesto se devuelve en toda salida, tambien por parada
+        Restaurant& r;
+        ~SlotGuard() { r.leaveSlot(); }
+    } guard{r};
     courier_.setState(CourierState::PickingUp);
-    if (!waitSim(item.readyAtMs)) return false;
-    logger_.publish(Event::pickupStarted(clock_.nowMs(), item.id, courier_.id(), item.restaurantId));
-    if (!waitSim(clock_.nowMs() + kPickupHandoverMs)) return false;
-    courier_.markPickedUp(item.id);
-    logger_.publish(Event::orderPickedUp(clock_.nowMs(), item.id, courier_.id(), item.restaurantId));
+    for (const BagItem& b : mine) {
+        logger_.publish(Event::pickupStarted(clock_.nowMs(), b.id, courier_.id(), restaurantId));
+        if (!waitSim(clock_.nowMs() + kPickupHandoverMs)) return false;
+        courier_.markPickedUp(b.id);
+        logger_.publish(Event::orderPickedUp(clock_.nowMs(), b.id, courier_.id(), restaurantId));
+    }
     return true;
 }
 

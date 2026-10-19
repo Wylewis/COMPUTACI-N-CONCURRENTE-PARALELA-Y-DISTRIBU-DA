@@ -58,10 +58,12 @@ struct Rig {  // una moto con su hilo, reloj a escala y log propio
     SimClock clock;
     StopSignal stop;
     EventLogger logger;
+    Restaurants restaurants;
     Courier courier;
     CourierThread thread;
     Rig(const std::string& path, const std::string& id, int bag, const Config& cfg, const Graph& g, double scale = 1000.0)
-        : clock(scale), logger(path, {id}), courier(id, "A", bag), thread(courier, g, cfg.restaurants, 36.0, logger, clock, stop) {
+        : clock(scale), logger(path, {id}), restaurants(cfg.restaurants), courier(id, "A", bag),
+          thread(courier, g, restaurants, 36.0, logger, clock, stop) {
         clock.start();
         thread.start();
     }
@@ -110,6 +112,33 @@ int main() {
         const auto before = steady_clock::now();
         r.thread.join();
         check(steady_clock::now() - before < milliseconds(500), "join despierta al hilo dormido");
+    }
+    {   // dos motos y un solo puesto: la segunda hace fila y recoge despues de que la primera termina
+        std::remove(path.c_str());
+        SimClock clock(1000.0);
+        StopSignal stop;
+        EventLogger logger(path, {"d0", "d1"});
+        Restaurants restaurants(cfg.restaurants);
+        Courier c0("d0", "A", 1), c1("d1", "A", 1);
+        CourierThread t0(c0, g, restaurants, 36.0, logger, clock, stop), t1(c1, g, restaurants, 36.0, logger, clock, stop);
+        clock.start();
+        t0.start(), t1.start();
+        Order a = created("a", "C", logger), b = created("b", "C", logger);
+        t0.assign(a), t1.assign(b);
+        for (int i = 0; i < 600 && t0.delivered() + t1.delivered() < 2; ++i) std::this_thread::sleep_for(milliseconds(5));
+        stop.request();
+        t0.join(), t1.join();
+        logger.close();
+        std::int64_t firstPickedUp = -1, secondStarted = -1;
+        std::ifstream in(path);
+        for (std::string line; std::getline(in, line);) {
+            const json j = json::parse(line);
+            if (!j.contains("event")) continue;
+            if (j["event"] == "orderPickedUp" && firstPickedUp < 0) firstPickedUp = j["t"];
+            if (j["event"] == "pickupStarted") secondStarted = j["t"];
+        }
+        check(t0.delivered() + t1.delivered() == 2 && secondStarted >= firstPickedUp && restaurants.at("r0").served() == 2,
+              "con un puesto, la segunda recogida empieza cuando termina la primera");
     }
     std::remove(path.c_str());
 

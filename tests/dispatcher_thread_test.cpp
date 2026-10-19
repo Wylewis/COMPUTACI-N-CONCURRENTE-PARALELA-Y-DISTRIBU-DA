@@ -59,13 +59,14 @@ struct Rig {
     StopSignal stop;
     EventLogger logger;
     OrderBook book;
+    Restaurants restaurants;
     Fleet fleet;
     std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
-    Rig(const std::string& path, int couriers, const std::vector<int>& restaurants, std::int64_t acceptMs = 3'600'000)
+    Rig(const std::string& path, int couriers, const std::vector<int>& which, std::int64_t acceptMs = 3'600'000)
         : cfg(lineCity(couriers)), graph(cfg), logger(path, Fleet::courierIds(couriers)), book(cfg),
-          fleet(cfg.fleet, graph, cfg.restaurants, logger, clock, stop) {
+          restaurants(cfg.restaurants), fleet(cfg.fleet, graph, restaurants, logger, clock, stop) {
         cfg.dispatch.acceptTimeoutMs = acceptMs;
-        for (int r : restaurants)
+        for (int r : which)
             dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0,
                                                                       cfg.dispatch.acceptTimeoutMs, logger, clock, stop));
         clock.start();

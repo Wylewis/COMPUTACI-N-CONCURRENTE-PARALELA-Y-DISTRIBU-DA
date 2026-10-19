@@ -32,6 +32,18 @@ c["simulation"]["timeScale"] = 240
 json.dump(c, open(short, "w"))
 c["simulation"]["durationS"] = 0
 json.dump(c, open(forever, "w"))
+# Ciclo completo: 40 minutos simulados a 2400x (un segundo real), preparacion
+# de 30 a 60 s para que haya entregas, y averias frecuentes para que haya
+# liberaciones, reasignaciones y rescates.
+c = json.load(open(src))
+c["map"]["image"] = src.rsplit("/", 1)[0] + "/../data/equipetrol.png"
+c["orders"]["meanIntervalMs"] = 15000
+for r in c["restaurants"]:
+    r["prepTimeMs"] = [30000, 60000]
+c["incidents"]["breakdownProbability"] = 0.3
+c["simulation"]["durationS"] = 2400
+c["simulation"]["timeScale"] = 2400
+json.dump(c, open(short.replace("short.json", "full.json"), "w"))
 EOF
 
 check_run() {
@@ -59,6 +71,23 @@ if [ "$created" -lt 5 ]; then
 fi
 if ! grep -q '"queueFull"' "$work/tiempo.log"; then
     echo "FALLO  tiempo_cumplido: con libro de 5 se esperaba algun queueFull"; failures=$((failures + 1))
+fi
+
+# 1b. Ciclo completo: entregas, averias, liberaciones y rescates reales, y el
+#     resumen cuadra con el log (lo comprueba check_log con --summary)
+"$bin" "$work/full.json" --log "$work/full.log" > "$work/full.out" 2> "$work/full.err"
+check_run "ciclo_completo" $? "$work/full.out" "$work/full.log" "$work/full.json"
+for needle in orderDelivered courierBreakdown orderReassigned pickupStarted; do
+    if ! grep -q "\"$needle\"" "$work/full.log"; then
+        echo "FALLO  ciclo_completo: no aparece ningun $needle en 40 minutos simulados"; failures=$((failures + 1))
+    fi
+done
+delivered=$(grep -c '"orderDelivered"' "$work/full.log")
+if [ "$delivered" -lt 20 ]; then
+    echo "FALLO  ciclo_completo: solo $delivered entregas en 40 minutos simulados"; failures=$((failures + 1))
+fi
+if grep -q " 0 rescates" "$work/full.err"; then
+    echo "AVISO  ciclo_completo: sin rescates en esta corrida (hace falta una averia con pedidos ya recogidos)"
 fi
 
 # 2. Termina por SIGINT, en menos de 5 segundos reales

@@ -283,6 +283,12 @@ Pruebas unitarias (se construyen con `make` dentro de `build/`):
 ctest --output-on-failure
 ```
 
+Entre ellas, `tests/run_sim_tests.sh` corre el programa completo con configs derivados del de
+Equipetrol y verifica cada corrida con `check_log.py`: fin por tiempo cumplido (con `queueFull`),
+fin por SIGINT en menos de 5 s, fin por SIGTERM, y un ciclo completo de 40 minutos simulados en un
+segundo real con preparación corta y averías frecuentes, que exige entregas, recogidas, averías y
+reasignaciones reales y que el resumen cuadre con el log.
+
 ## Dependencias
 
 - cmake ≥ 3.11

@@ -63,6 +63,7 @@ add_executable(delivery_sim
   src/restaurant.cpp
   src/restaurants.cpp
   src/breakdown.cpp
+  src/live_counters.cpp
 )
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
@@ -178,6 +179,13 @@ target_link_libraries(hardware_test PRIVATE Threads::Threads)
 apply_sanitizers(hardware_test)
 add_test(NAME hardware_test COMMAND hardware_test)
 
+add_executable(live_counters_test tests/live_counters_test.cpp src/live_counters.cpp)
+target_include_directories(live_counters_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(live_counters_test PRIVATE -Wall -Wextra)
+target_link_libraries(live_counters_test PRIVATE Threads::Threads)
+apply_sanitizers(live_counters_test)
+add_test(NAME live_counters_test COMMAND live_counters_test)
+
 add_executable(breakdown_test tests/breakdown_test.cpp src/breakdown.cpp)
 target_include_directories(breakdown_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(breakdown_test PRIVATE -Wall -Wextra)
@@ -193,7 +201,7 @@ apply_sanitizers(restaurant_test)
 add_test(NAME restaurant_test COMMAND restaurant_test)
 
 add_executable(fleet_test tests/fleet_test.cpp
-  src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
+  src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
   src/config.cpp src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(fleet_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(fleet_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
@@ -203,7 +211,7 @@ apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
 
 add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(dispatcher_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -223,7 +231,7 @@ apply_sanitizers(dispatch_select_test)
 add_test(NAME dispatch_select_test COMMAND dispatch_select_test)
 
 add_executable(courier_thread_test tests/courier_thread_test.cpp
-  src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/order.cpp src/route_motion.cpp src/graph.cpp src/config.cpp
+  src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/order.cpp src/route_motion.cpp src/graph.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(courier_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(courier_thread_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)

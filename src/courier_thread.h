@@ -16,6 +16,7 @@
 #include "courier.h"
 #include "event_logger.h"
 #include "graph.h"
+#include "live_counters.h"
 #include "restaurants.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
@@ -40,6 +41,7 @@ public:
     // Antes de start(): sorteo de averias de esta moto, y a quien devolver los pedidos no recogidos.
     void enableBreakdowns(std::uint64_t seed, std::size_t index, double probability) { roll_.emplace(seed, index, probability); }
     void onReleased(std::function<void(Order)> f) { onReleased_ = std::move(f); }
+    void counters(CourierCounters* c) { counters_ = c; }  // antes de start(): contadores en vivo de esta moto
     // Antes de start(): a quien pedir una moto de rescate cuando queda averiada con pedidos recogidos.
     void onRescueNeeded(std::function<void(const std::string&)> f) { onRescueNeeded_ = std::move(f); }
     // Encargo de rescate: ir hasta la moto averiada y traspasar sus pedidos recogidos a la propia mochila.
@@ -74,6 +76,7 @@ private:
     std::atomic<std::int64_t> delivered_{0};
     std::function<void()> onFreed_;
     std::function<void(Order)> onReleased_;
+    CourierCounters* counters_ = nullptr;
     std::function<void(const std::string&)> onRescueNeeded_;
     std::deque<Courier*> rescues_queue_;  // bajo mutex_
     std::atomic<std::int64_t> rescues_{0};

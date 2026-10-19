@@ -134,6 +134,7 @@ CourierThread::Travel CourierThread::travelTo(const std::string& node, CourierSt
 bool CourierThread::breakDownAt(const std::string& node) {
     courier_.endTrip(node, CourierState::BrokenDown);
     breakdowns_.fetch_add(1, std::memory_order_acq_rel);
+    if (counters_) counters_->breakdowns.fetch_add(1, std::memory_order_relaxed);
     logger_.publish(Event::courierBreakdown(clock_.nowMs(), courier_.id()));
     for (const BagItem& b : courier_.bagItems()) {  // las reservas no recogidas se liberan
         if (b.state != OrderState::Assigned) continue;
@@ -172,6 +173,7 @@ bool CourierThread::pickUpAt(const std::string& restaurantId, const std::vector<
         logger_.publish(Event::pickupStarted(clock_.nowMs(), b.id, courier_.id(), restaurantId));
         if (!waitSim(clock_.nowMs() + kPickupHandoverMs)) return false;
         courier_.markPickedUp(b.id);
+        if (counters_) counters_->pickedUp.fetch_add(1, std::memory_order_relaxed);
         logger_.publish(Event::orderPickedUp(clock_.nowMs(), b.id, courier_.id(), restaurantId));
     }
     return true;
@@ -184,6 +186,7 @@ bool CourierThread::deliver(const std::string& orderId) {
     order->markDelivered(clock_.nowMs());
     logger_.publish(Event::orderDelivered(order->deliveredAtMs, order->id, courier_.id()));
     delivered_.fetch_add(1, std::memory_order_acq_rel);
+    if (counters_) counters_->delivered.fetch_add(1, std::memory_order_relaxed);
     if (onFreed_) onFreed_();
     return true;
 }

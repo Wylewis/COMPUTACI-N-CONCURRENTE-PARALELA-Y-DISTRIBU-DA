@@ -71,6 +71,15 @@ void drawStatePanel(cv::Mat& frame, const std::vector<CourierView>& fleet, std::
     }
 }
 
+void drawCountersPanel(cv::Mat& frame, const PanelStats& st) {
+    cv::rectangle(frame, {0, 22, frame.cols, 20}, {255, 255, 255}, cv::FILLED);
+    const std::string line = "creados " + std::to_string(st.created) + "   asignados " + std::to_string(st.assigned) +
+                             "   recogidos " + std::to_string(st.pickedUp) + "   entregados " + std::to_string(st.delivered) +
+                             "   rechazados " + std::to_string(st.rejected) + "   averias " + std::to_string(st.breakdowns) +
+                             "   pendientes " + std::to_string(st.pending);
+    cv::putText(frame, line, {6, 37}, cv::FONT_HERSHEY_SIMPLEX, 0.4, {20, 20, 20}, 1, cv::LINE_AA);
+}
+
 void drawFleet(cv::Mat& frame, const MapProjection& proj, const Graph& graph,
                const std::vector<CourierView>& fleet, std::int64_t nowMs) {
     drawDeliveryPoints(frame, proj, graph, fleet);

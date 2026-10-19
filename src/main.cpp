@@ -1,16 +1,20 @@
 #include <chrono>
+#include <memory>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "config.h"
+#include "dispatcher_thread.h"
 #include "distance_table_parallel.h"
 #include "event_logger.h"
+#include "fleet.h"
 #include "generator_thread.h"
 #include "graph.h"
 #include "hardware.h"
 #include "order_book.h"
 #include "order_generator.h"
+#include "restaurants.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
 #include "thread_pool.h"
@@ -46,12 +50,6 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
         }
     }
     return true;
-}
-
-std::vector<std::string> courierIds(const Config& config) {
-    std::vector<std::string> ids;
-    for (int i = 0; i < config.fleet.couriers; ++i) ids.push_back("c" + std::to_string(i));
-    return ids;
 }
 
 }  // namespace
@@ -94,14 +92,24 @@ int main(int argc, char** argv) {
                   << hardwareThreads() << ", rango " << kPoolMinimum << "-" << kPoolMaximum << ")\n";
 
         SimClock clock(config.simulation.timeScale);
-        EventLogger logger(opts.logPath, courierIds(config));
+        EventLogger logger(opts.logPath, Fleet::courierIds(config.fleet.couriers));
         OrderBook book(config);
         OrderGenerator generator(config, graph);
         StopSignal stop;
         SignalWatcher watcher(stop);
         GeneratorThread generatorThread(generator, book, logger, clock, stop);
+        Restaurants restaurants(config.restaurants);
+        Fleet fleet(config.fleet, graph, restaurants, logger, clock, stop);
+        fleet.enableBreakdowns(config.incidents, config.orders.seed, [&book](Order o) { book.putBack(std::move(o)); });
+        std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
+        for (const RestaurantConfig& r : config.restaurants) {
+            dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,
+                                                                     config.dispatch.acceptTimeoutMs, logger, clock, stop));
+        }
 
         clock.start();
+        fleet.start();
+        for (auto& d : dispatchers) d->start();
         generatorThread.start();
         std::cout << kStartLine << std::endl;
 
@@ -115,18 +123,29 @@ int main(int argc, char** argv) {
         const bool bySignal = watcher.signalsReceived() > 0;
         stop.request();
 
-        // Apagado ordenado: nadie crea mas pedidos, se registra la parada,
-        // el libro se cierra y lo que quedaba en espera es pending.
+        // Apagado ordenado: nadie crea mas pedidos, se registra la parada, el
+        // libro se cierra (los despachadores devuelven lo que tenian en la mano
+        // y terminan), las motos salen de filas y viajes, y lo que quedaba en
+        // el libro o en las mochilas es pending.
         generatorThread.join();
         logger.publish(Event::simulationStopping(clock.nowMs()));
         book.close();
+        for (auto& d : dispatchers) d->join();
+        fleet.join();
         const std::vector<Order> unfinished = book.drain();
+        std::size_t inBags = 0;
+        for (const CourierSnapshot& c : fleet.snapshots(clock.nowMs())) inBags += static_cast<std::size_t>(c.bagCount);
         logger.close();
 
+        std::int64_t assigned = 0, rejectedNoCourier = 0, retries = 0;
+        for (const auto& d : dispatchers) assigned += d->assigned(), rejectedNoCourier += d->rejected(), retries += d->retries();
         std::cerr << "delivery_sim: parada por " << (bySignal ? "senal" : "tiempo cumplido") << " a los "
                   << clock.nowMs() << " ms simulados; " << generatorThread.batches() << " rafagas, "
                   << generatorThread.created() << " pedidos creados, " << generatorThread.rejected()
-                  << " rechazados, " << unfinished.size() << " en espera\n";
+                  << " rechazados al crear, " << assigned << " asignados (" << retries << " reintentos), "
+                  << rejectedNoCourier << " sin repartidor, " << fleet.delivered() << " entregados, "
+                  << fleet.breakdowns() << " averias, " << fleet.rescues() << " rescates, " << unfinished.size()
+                  << " en el libro y " << inBags << " en mochilas\n";
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;
     } catch (const std::exception& e) {

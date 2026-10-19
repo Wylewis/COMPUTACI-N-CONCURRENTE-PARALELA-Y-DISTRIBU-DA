@@ -72,4 +72,7 @@ struct Order {
     void assignTo(const std::string& courier);
     void reject(RejectReason reason);
     void markDelivered(std::int64_t atMs);
+    // Vuelve a espera tras la averia de su repartidor: Assigned -> Created, y
+    // conserva courierId como procedencia para registrar el traspaso.
+    void release();
 };

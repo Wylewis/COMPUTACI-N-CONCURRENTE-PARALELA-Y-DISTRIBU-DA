@@ -167,7 +167,7 @@ int main() {
         bool releasedOk;
         {
             std::lock_guard<std::mutex> lock(m);
-            releasedOk = released.size() == 1 && released[0].courierId == "e0";
+            releasedOk = released.size() == 1 && released[0].courierId == "e0" && released[0].state == OrderState::Created;
             if (releasedOk) back = std::move(released[0]);
         }
         check(t0.breakdowns() == 1 && releasedOk && c0.state() == CourierState::BrokenDown && c0.bagCount() == 0 &&

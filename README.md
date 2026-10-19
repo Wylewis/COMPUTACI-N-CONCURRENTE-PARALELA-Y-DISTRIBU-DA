@@ -193,18 +193,16 @@ sobre el instante simulado: no hay sondeo y la parada lo interrumpe en el acto, 
 
 ### Ejecución y apagado
 
-Al arrancar, `main` carga y valida el config, construye el grafo y la tabla de distancias, crea el
-pool de estimación, el reloj simulado, el log con su hilo escritor, el libro de pedidos y el vigía de
-señales, lanza el hilo generador e imprime `Simulation has started...`. Después duerme hasta que se
-cumpla `simulation.durationS` o llegue SIGINT o SIGTERM, lo que ocurra primero. El apagado es
-ordenado: se pide la parada, el generador termina y se une, se registra `simulationStopping`, el
-libro se cierra y lo que quedaba en espera es `pending`, el log se cierra y el resumen final se
-imprime como última línea de stdout. `tests/run_sim_tests.sh` corre el programa por tiempo
-cumplido, por SIGINT y por SIGTERM y verifica cada corrida con `check_log.py`.
-
-El hilo generador (`generator_thread`) itera sobre las ráfagas: duerme hasta el instante simulado de
-la próxima con la espera interrumpible de la señal de parada, entrega la ráfaga al libro y publica
-`orderCreated` por cada pedido y `orderRejected` por los rechazados.
+`main` arma la simulación completa: carga y valida la configuración, construye el grafo y la tabla de
+distancias, crea el reloj simulado, el log, el libro de pedidos, el generador, los restaurantes, la
+flota (con el sorteo de averías y la devolución de reservas al libro) y un despachador por
+restaurante. Arranca la flota, los despachadores y el generador, imprime la línea de inicio y espera
+con la señal de parada hasta que se cumpla `durationS` o llegue SIGINT/SIGTERM, lo que ocurra
+primero. El apagado es ordenado: se pide parar; se une el generador (nadie crea más pedidos); se
+registra `simulationStopping`; se cierra el libro, con lo que los despachadores devuelven el pedido
+que tuvieran en la mano y terminan; la flota saca a las motos de filas y viajes y las une; lo que
+quedó en el libro y en las mochilas cuenta como `pending`; se cierra el log y se imprime el resumen.
+Todas las esperas son sobre variables de condición o sobre la señal de parada: no hay sondeo.
 
 ### Generación de pedidos
 

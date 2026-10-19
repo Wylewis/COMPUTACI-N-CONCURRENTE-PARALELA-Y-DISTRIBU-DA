@@ -181,8 +181,13 @@ tramo, al terminar ese tramo la moto queda `BrokenDown` en el nodo, publica `cou
 devuelve los pedidos aún no recogidos (sus reservas se liberan y vuelven al libro para que otro
 los tome, lo que se registra como `orderReassigned` al asignarse de nuevo), espera `kRepairMs` y
 vuelve al servicio avisando a la flota. Una moto averiada no se considera en la selección: la copia
-para estimar la marca como tal. Los pedidos ya recogidos quedan en su mochila hasta que se repara;
-el traspaso a otra moto llega en el PR siguiente. Cada tramo y cada espera es un `StopSignal::waitUntil`
+para estimar la marca como tal. Si además lleva pedidos ya recogidos, pide
+rescate: la flota elige la moto más cercana en línea recta con lugar en la mochila y le encarga ir
+hasta la averiada, que se trata como un punto de recogida; al llegar, el traspaso entre las dos
+mochilas es atómico (`std::scoped_lock` sobre los dos mutex) y publica `orderReassigned` por pedido.
+Si ninguna moto puede, el rescate queda pendiente y se reintenta en cada cambio de la flota; si la
+averiada se repara antes, entrega ella misma. La rescatista que no llega (se avería ella) devuelve el
+encargo a la flota. Cada tramo y cada espera es un `StopSignal::waitUntil`
 sobre el instante simulado: no hay sondeo y la parada lo interrumpe en el acto, dejándolo en el
 último nodo alcanzado. La fila y los puestos de recogida llegan con el monitor del restaurante.
 

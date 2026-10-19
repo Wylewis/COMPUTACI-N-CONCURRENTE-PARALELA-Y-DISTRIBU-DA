@@ -164,7 +164,7 @@ apply_sanitizers(restaurant_test)
 add_test(NAME restaurant_test COMMAND restaurant_test)
 
 add_executable(fleet_test tests/fleet_test.cpp
-  src/fleet.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
+  src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
   src/config.cpp src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(fleet_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(fleet_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)

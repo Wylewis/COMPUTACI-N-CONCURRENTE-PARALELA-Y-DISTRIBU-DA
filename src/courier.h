@@ -57,6 +57,9 @@ public:
     CourierSnapshot estimateSnapshot(std::int64_t nowMs) const;
     CourierView view() const;
     std::vector<BagItem> bagItems() const;
+    // Traspaso atomico: toma los pedidos recogidos de una moto averiada, los que
+    // quepan, con los dos cerrojos a la vez. Devuelve los ids traspasados.
+    std::vector<std::string> takeOverFrom(Courier& broken);
     std::optional<std::string> nearestDelivery(const Graph& graph) const;
 
 private:

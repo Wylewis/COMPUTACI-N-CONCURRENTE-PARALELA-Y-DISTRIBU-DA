@@ -98,6 +98,24 @@ std::vector<BagItem> Courier::bagItems() const {
     return items;
 }
 
+std::vector<std::string> Courier::takeOverFrom(Courier& broken) {
+    std::vector<std::string> taken;
+    if (&broken == this) return taken;
+    std::scoped_lock lock(mutex_, broken.mutex_);
+    if (broken.state_ != CourierState::BrokenDown) return taken;
+    for (auto it = broken.bag_.begin(); it != broken.bag_.end() && static_cast<int>(bag_.size()) < bagCapacity_;) {
+        if (it->state != OrderState::PickedUp) {
+            ++it;
+            continue;
+        }
+        it->courierId = id_;
+        taken.push_back(it->id);
+        bag_.push_back(std::move(*it));
+        it = broken.bag_.erase(it);
+    }
+    return taken;
+}
+
 std::optional<std::string> Courier::nearestDelivery(const Graph& graph) const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::optional<std::string> best;

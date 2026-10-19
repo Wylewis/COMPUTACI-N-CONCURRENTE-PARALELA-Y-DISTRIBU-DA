@@ -29,6 +29,12 @@ function(apply_sanitizers target)
 endfunction()
 
 find_package(Threads REQUIRED)
+find_package(OpenCV CONFIG)
+if(OpenCV_FOUND)
+  message(STATUS "OpenCV ${OpenCV_VERSION}: delivery_sim con ventana")
+else()
+  message(WARNING "OpenCV no encontrado: delivery_sim se construye sin ventana")
+endif()
 
 add_executable(delivery_sim
   src/main.cpp
@@ -65,6 +71,20 @@ target_include_directories(delivery_sim SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third
 
 target_compile_options(delivery_sim PRIVATE -Wall -Wextra)
 target_link_libraries(delivery_sim PRIVATE Threads::Threads)
+if(OpenCV_FOUND)
+  target_sources(delivery_sim PRIVATE src/window.cpp)
+  target_include_directories(delivery_sim SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+  target_link_libraries(delivery_sim PRIVATE opencv_core opencv_imgproc opencv_imgcodecs opencv_highgui)
+  target_compile_definitions(delivery_sim PRIVATE HAVE_OPENCV=1)
+
+  add_executable(window_test tests/window_test.cpp src/window.cpp src/map_projection.cpp src/graph.cpp src/config.cpp)
+  target_include_directories(window_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_include_directories(window_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party ${OpenCV_INCLUDE_DIRS})
+  target_compile_options(window_test PRIVATE -Wall -Wextra)
+  target_link_libraries(window_test PRIVATE opencv_core opencv_imgproc opencv_imgcodecs opencv_highgui)
+  apply_sanitizers(window_test)
+  add_test(NAME window_test COMMAND window_test ${CMAKE_SOURCE_DIR}/config/equipetrol.json)
+endif()
 apply_sanitizers(delivery_sim)
 
 # Pruebas unitarias: se construyen con `make` y se ejecutan con `ctest`.

@@ -142,6 +142,17 @@ azar donde ocurre, para que la avería caiga "en un punto aleatorio del trayecto
 vuelve al servicio tras `kRepairMs` (5 min simulados), un valor fijo porque la configuración del
 enunciado no lo contempla. La avería en el hilo de la moto llega en el PR siguiente.
 
+### Ventana
+
+El módulo `window` dibuja el mapa con OpenCV. `MapWindow` carga la imagen de `map.image`, construye la
+proyección a partir de `map.bounds` y pinta la capa estática una sola vez: las calles (doble sentido
+en gris, sentido único en azul), los restaurantes (círculo naranja con su nombre) y la atribución de
+OpenStreetMap en una banda al pie. `frame()` devuelve una copia de esa capa para dibujar encima la
+flota en cada cuadro, y `show()` la muestra y espera unos milisegundos, devolviendo `false` si se
+cierra la ventana o se pulsa `q` o Esc. El dibujo no toca ningún dato compartido: recibe copias.
+OpenCV es opcional en la compilación: si CMake no lo encuentra, `delivery_sim` se construye sin
+ventana (`HAVE_OPENCV` no definido) y el resto funciona igual.
+
 ### Registro de restaurantes
 
 `restaurants` guarda un `Restaurant` por entrada de la configuración, por id, y despierta a todos al

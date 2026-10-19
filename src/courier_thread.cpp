@@ -27,8 +27,10 @@ bool CourierThread::assign(Order& order) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!courier_.reserve(order)) return false;
-        if (from.empty()) logger_.publish(Event::orderAssigned(clock_.nowMs(), id, courier_.id()));
-        else logger_.publish(Event::orderReassigned(clock_.nowMs(), id, from, courier_.id()));
+        if (from.empty() || from == courier_.id())  // nuevo, o la misma moto lo retoma tras repararse
+            logger_.publish(Event::orderAssigned(clock_.nowMs(), id, courier_.id()));
+        else
+            logger_.publish(Event::orderReassigned(clock_.nowMs(), id, from, courier_.id()));
     }
     cv_.notify_one();
     return true;
@@ -136,7 +138,9 @@ bool CourierThread::breakDownAt(const std::string& node) {
     for (const BagItem& b : courier_.bagItems()) {  // las reservas no recogidas se liberan
         if (b.state != OrderState::Assigned) continue;
         std::optional<Order> o = courier_.removeOrder(b.id);
-        if (o && onReleased_) onReleased_(std::move(*o));
+        if (!o) continue;
+        o->release();
+        if (onReleased_) onReleased_(std::move(*o));
     }
     if (courier_.bagCount() > 0 && onRescueNeeded_) onRescueNeeded_(courier_.id());  // quedan recogidos
     if (!waitSim(clock_.nowMs() + kRepairMs)) return false;

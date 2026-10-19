@@ -74,6 +74,13 @@ void Order::reject(RejectReason reason) {
     rejectReason = reason;
 }
 
+void Order::release() {
+    if (state != OrderState::Assigned) {
+        throw InvalidTransition("pedido " + id + ": solo se libera un pedido asignado, esta " + toString(state));
+    }
+    state = OrderState::Created;
+}
+
 void Order::markDelivered(std::int64_t atMs) {
     transitionTo(OrderState::Delivered);
     deliveredAtMs = atMs;

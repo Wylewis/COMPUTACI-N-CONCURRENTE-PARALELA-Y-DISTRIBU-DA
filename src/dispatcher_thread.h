@@ -12,19 +12,20 @@
 #include "order_book.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
+#include "thread_pool.h"
 
 // El despachador de un restaurante: toma pedidos de su cola del libro, copia
 // la flota, elige con selectCourier y asigna. Si nadie puede, duerme hasta que
 // la flota cambie; si la reserva falla porque otro despachador gano esa moto,
 // reintenta con copias frescas. Las estimaciones de cada anillo se calculan
-// en paralelo, una tarea por candidato, con plazo quoteTimeoutMs real y las
-// tardias ignoradas. Si vence acceptTimeoutMs desde la creacion
+// en paralelo en el pool de estimacion, una tarea por candidato, con plazo
+// quoteTimeoutMs real y las tardias ignoradas. Si vence acceptTimeoutMs desde la creacion
 // sin moto, rechaza con noCourier. Al parar devuelve el pedido al libro.
 class DispatcherThread {
 public:
     DispatcherThread(const RestaurantConfig& restaurant, OrderBook& book, Fleet& fleet, const Graph& graph,
-                     double speedKmh, const DispatchConfig& dispatch, EventLogger& logger, const SimClock& clock,
-                     StopSignal& stop);
+                     double speedKmh, const DispatchConfig& dispatch, ThreadPool& estimators, EventLogger& logger,
+                     const SimClock& clock, StopSignal& stop);
     ~DispatcherThread();
     DispatcherThread(const DispatcherThread&) = delete;
     DispatcherThread& operator=(const DispatcherThread&) = delete;
@@ -50,6 +51,7 @@ private:
     const double speedKmh_;
     const std::int64_t acceptTimeoutMs_;
     const std::chrono::milliseconds quoteTimeout_;
+    ThreadPool& estimators_;
     EventLogger& logger_;
     const SimClock& clock_;
     StopSignal& stop_;

@@ -1,15 +1,16 @@
 #include "dispatcher_thread.h"
 
+#include <memory>
 #include <utility>
 
 #include "dispatch_select.h"
 
 DispatcherThread::DispatcherThread(const RestaurantConfig& restaurant, OrderBook& book, Fleet& fleet,
                                    const Graph& graph, double speedKmh, const DispatchConfig& dispatch,
-                                   EventLogger& logger, const SimClock& clock, StopSignal& stop)
+                                   ThreadPool& estimators, EventLogger& logger, const SimClock& clock, StopSignal& stop)
     : restaurant_(restaurant), book_(book), fleet_(fleet), graph_(graph), speedKmh_(speedKmh),
-      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), logger_(logger),
-      clock_(clock), stop_(stop) {}
+      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), estimators_(estimators),
+      logger_(logger), clock_(clock), stop_(stop) {}
 
 DispatcherThread::~DispatcherThread() { join(); }
 
@@ -38,10 +39,16 @@ DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
     while (!stop_.requested()) {
         const std::uint64_t seen = fleet_.version();
         const std::int64_t now = clock_.nowMs();
-        const Mapper concurrent = [&](const std::vector<CourierSnapshot>& ring) {
-            AsyncEstimates r = estimateAllAsync(
-                ring, [&](const CourierSnapshot& c) { return estimateDelivery(c, order, restaurant_, graph_, speedKmh_, now); },
-                quoteTimeout_);
+        // Las tareas reciben una copia del pedido: una tardia puede seguir en el
+        // pool cuando el original ya se movio a la moto.
+        auto copy = std::make_shared<Order>();
+        copy->id = order.id, copy->restaurantId = order.restaurantId, copy->deliveryNode = order.deliveryNode;
+        copy->createdAtMs = order.createdAtMs, copy->readyAtMs = order.readyAtMs;
+        const Mapper concurrent = [&, copy](const std::vector<CourierSnapshot>& ring) {
+            AsyncEstimates r = estimateAllPooled(
+                ring,
+                [copy, this, now](const CourierSnapshot& c) { return estimateDelivery(c, *copy, restaurant_, graph_, speedKmh_, now); },
+                estimators_, quoteTimeout_);
             lateQuotes_.fetch_add(r.late, std::memory_order_acq_rel);
             return r.estimates;
         };

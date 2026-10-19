@@ -11,6 +11,7 @@
 #include "estimate.h"
 #include "graph.h"
 #include "order.h"
+#include "thread_pool.h"
 
 // Seleccion del repartidor para un pedido, sobre copias (CourierSnapshot):
 // anillos de radio creciente alrededor del restaurante; en cada anillo, map
@@ -44,6 +45,12 @@ struct AsyncEstimates {
 };
 AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
                                 std::chrono::milliseconds quoteTimeout);
+
+// Igual, pero las tareas van al pool en vez de a un hilo nuevo cada una. Los
+// futures del pool vienen de packaged_task y no se unen al destruirse: una
+// estimacion tardia sigue en el pool sin retener al despachador.
+AsyncEstimates estimateAllPooled(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
+                                 ThreadPool& pool, std::chrono::milliseconds quoteTimeout);
 
 // reduce: la de menor deliveryAtMs; en empate, el id menor (determinista).
 std::optional<Estimate> bestEstimate(const std::vector<Estimate>& estimates);

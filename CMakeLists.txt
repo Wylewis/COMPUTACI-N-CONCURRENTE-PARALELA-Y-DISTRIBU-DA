@@ -193,7 +193,7 @@ apply_sanitizers(restaurant_test)
 add_test(NAME restaurant_test COMMAND restaurant_test)
 
 add_executable(fleet_test tests/fleet_test.cpp
-  src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
+  src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp src/order.cpp
   src/config.cpp src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(fleet_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(fleet_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
@@ -203,7 +203,7 @@ apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
 
 add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(dispatcher_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -214,10 +214,11 @@ apply_sanitizers(dispatcher_thread_test)
 add_test(NAME dispatcher_thread_test COMMAND dispatcher_thread_test)
 
 add_executable(dispatch_select_test tests/dispatch_select_test.cpp
-  src/dispatch_select.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp)
+  src/dispatch_select.cpp src/thread_pool.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp)
 target_include_directories(dispatch_select_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(dispatch_select_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(dispatch_select_test PRIVATE -Wall -Wextra)
+target_link_libraries(dispatch_select_test PRIVATE Threads::Threads)
 apply_sanitizers(dispatch_select_test)
 add_test(NAME dispatch_select_test COMMAND dispatch_select_test)
 

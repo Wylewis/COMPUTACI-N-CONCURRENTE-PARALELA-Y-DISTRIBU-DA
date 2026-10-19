@@ -33,12 +33,8 @@ std::vector<Estimate> estimateAll(const std::vector<CourierSnapshot>& candidates
     return out;
 }
 
-AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
-                                std::chrono::milliseconds quoteTimeout) {
-    std::vector<std::future<Estimate>> futures;
-    futures.reserve(candidates.size());
-    for (const CourierSnapshot& c : candidates)
-        futures.push_back(std::async(std::launch::async, [&one, c] { return one(c); }));
+namespace {
+AsyncEstimates collect(std::vector<std::future<Estimate>> futures, std::chrono::milliseconds quoteTimeout) {
     const auto deadline = std::chrono::steady_clock::now() + quoteTimeout;
     AsyncEstimates out;
     for (std::future<Estimate>& f : futures) {
@@ -52,8 +48,27 @@ AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, 
             ++out.failed;
         }
     }
-    return out;  // los futures tardios se unen al destruirse: ver D46.3
+    return out;
 }
+}  // namespace
+
+AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
+                                std::chrono::milliseconds quoteTimeout) {
+    std::vector<std::future<Estimate>> futures;
+    futures.reserve(candidates.size());
+    for (const CourierSnapshot& c : candidates)
+        futures.push_back(std::async(std::launch::async, [one, c] { return one(c); }));
+    return collect(std::move(futures), quoteTimeout);  // los futures tardios se unen al destruirse: ver D46.3
+}
+
+AsyncEstimates estimateAllPooled(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
+                                 ThreadPool& pool, std::chrono::milliseconds quoteTimeout) {
+    std::vector<std::future<Estimate>> futures;
+    futures.reserve(candidates.size());
+    for (const CourierSnapshot& c : candidates) futures.push_back(pool.submit([one, c] { return one(c); }));
+    return collect(std::move(futures), quoteTimeout);
+}
+
 
 std::optional<Estimate> bestEstimate(const std::vector<Estimate>& estimates) {
     if (estimates.empty()) return std::nullopt;

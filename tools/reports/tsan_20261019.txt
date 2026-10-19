@@ -1,0 +1,44 @@
+ThreadSanitizer: corrida completa de delivery_sim
+fecha: Mon Oct 19 12:01:04 -04 2026
+maquina: Darwin 25.6.0 arm64, Apple M5 Pro, 18 hilos
+compilador: Apple clang version 21.0.0 (clang-2100.1.1.101)
+commit: 88266a9
+config: config/equipetrol.json con pedidos cada 10 s, rafagas de hasta 12, preparacion 30-90 s, averias 0.3, 30 min simulados a 600x
+salida sin editar; solo las rutas del repositorio y del directorio temporal se abrevian como <repo> y <tmp>
+
+=== 1. fin por tiempo cumplido ===
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 8 repartidores; 630 aristas; mapa <repo>/config/../data/equipetrol.png; log <tmp>/tiempo.log
+delivery_sim: tabla de distancias de 9 restaurantes en 583 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+Simulation has started...
+delivery_sim: parada por tiempo cumplido a los 1803359 ms simulados; 173 rafagas, 385 pedidos creados, 254 rechazados al crear, 78 asignados (282 reintentos, 0 estimaciones tardias), 35 sin repartidor, 21 entregados, 22 averias, 3 rescates, 58 en el libro y 17 en mochilas
+{"created":385,"delivered":21,"rejected":289,"pending":75,"reassigned":20,"breakdowns":22,"avgDeliveryMs":893781,"maxDeliveryMs":1473546,"deliveredPerCourier":{"c0":4,"c1":2,"c2":4,"c3":0,"c4":1,"c5":2,"c6":5,"c7":3}}
+estado de salida: 0
+  maxDeliveryMs: 1473546
+  deliveredPerCourier: {'c0': 4, 'c2': 4, 'c6': 5, 'c1': 2, 'c5': 2, 'c4': 1, 'c7': 3}
+check_log: sin errores
+
+=== 2. SIGINT a mitad de la corrida ===
+estado de salida: 0
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 8 repartidores; 630 aristas; mapa <repo>/config/../data/equipetrol.png; log <tmp>/senal.log
+delivery_sim: tabla de distancias de 9 restaurantes en 579 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+Simulation has started...
+delivery_sim: parada por senal a los 1058482 ms simulados; 100 rafagas, 236 pedidos creados, 133 rechazados al crear, 53 asignados (137 reintentos, 0 estimaciones tardias), 17 sin repartidor, 10 entregados, 14 averias, 2 rescates, 59 en el libro y 17 en mochilas
+{"created":236,"delivered":10,"rejected":150,"pending":76,"reassigned":14,"breakdowns":14,"avgDeliveryMs":669880,"maxDeliveryMs":959928,"deliveredPerCourier":{"c0":3,"c1":1,"c2":2,"c3":0,"c4":1,"c5":1,"c6":2,"c7":0}}
+  maxDeliveryMs: 959928
+  deliveredPerCourier: {'c0': 3, 'c2': 2, 'c6': 2, 'c1': 1, 'c4': 1, 'c5': 1}
+check_log: sin errores
+
+=== 3. estres de averias simultaneas ===
+breakdown_stress_test: 24 motos, 400 pedidos, 57 entregados, 378 averias, 619 reasignaciones, 60 rescates, 132 pendientes (125 en el libro, 7 en mochilas); apagado en 0.000726583 s
+breakdown_stress_test: todas las pruebas pasaron
+estado de salida: 0
+  maxDeliveryMs: 6303065
+  deliveredPerCourier: {'c13': 4, 'c11': 4, 'c1': 2, 'c16': 3, 'c0': 3, 'c10': 2, 'c12': 3, 'c20': 2, 'c18': 2, 'c19': 4, 'c2': 4, 'c23': 4, 'c21': 4, 'c14': 2, 'c15': 2, 'c5': 1, 'c9': 3, 'c8': 1, 'c6': 1, 'c17': 2, 'c7': 3, 'c4': 1}
+check_log: sin errores
+
+=== resumen ===
+reportes de ThreadSanitizer: 0
+salidas con estado distinto de 0: 0
+logs con errores del verificador: 0

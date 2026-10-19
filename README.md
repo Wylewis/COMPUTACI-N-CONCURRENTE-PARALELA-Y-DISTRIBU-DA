@@ -326,6 +326,13 @@ cmake -DENABLE_ASAN=ON .. && make
 LeakSanitizer viene incluido con AddressSanitizer en Linux; en macOS con Apple Silicon no está
 disponible, así que la detección de fugas se hace en Linux.
 
+`tools/run_tsan.sh` hace la corrida completa bajo ThreadSanitizer y guarda la salida sin editar en
+`tools/reports/tsan_<fecha>.txt`: construye `build/tsan`, corre la simulación con ráfagas y averías
+frecuentes hasta el fin por tiempo, la repite con SIGINT a mitad, corre la prueba de estrés de
+averías simultáneas, verifica cada log con `check_log.py` y cierra con el conteo de reportes del
+sanitizer, de salidas con error y de logs con errores. Sale con 1 si cualquiera de los tres no es
+cero. El reporte comprometido en el repositorio es la evidencia de la sección 11.
+
 Pruebas unitarias (se construyen con `make` dentro de `build/`):
 
 ```sh

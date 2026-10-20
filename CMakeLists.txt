@@ -232,6 +232,13 @@ target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads)
 apply_sanitizers(dispatcher_thread_test)
 add_test(NAME dispatcher_thread_test COMMAND dispatcher_thread_test)
 
+add_executable(distance_bench tools/bench/distance_bench.cpp
+  src/distance_table.cpp src/distance_table_parallel.cpp src/hardware.cpp src/graph.cpp src/config.cpp)
+target_include_directories(distance_bench PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(distance_bench SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_options(distance_bench PRIVATE -Wall -Wextra)
+target_link_libraries(distance_bench PRIVATE Threads::Threads)
+
 add_executable(dispatch_bench tools/bench/dispatch_bench.cpp
   src/dispatch_select.cpp src/thread_pool.cpp src/hardware.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp
   src/order.cpp src/config.cpp)

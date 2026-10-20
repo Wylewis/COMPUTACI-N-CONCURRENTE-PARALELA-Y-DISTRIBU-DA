@@ -9,7 +9,8 @@ Uso:
         --jobs 4 --out tools/reports/exp_bag.md
 
 --vary toma una ruta de clave del config y los valores a probar (numeros o
-cadenas); se puede repetir para variar varias claves a la vez (se combinan
+cadenas); un '*' en la ruta aplica a todos los elementos de una lista, como
+restaurants.*.pickupSlots; se puede repetir para variar varias claves a la vez (se combinan
 todas con todas). --set fija otras claves en todas las corridas. Cada
 combinacion se corre una vez por semilla; la tabla muestra la media por
 combinacion y el detalle por semilla queda en el JSON. Cada log se verifica
@@ -50,11 +51,13 @@ def parse_value(text):
 
 
 def set_path(cfg, path, value):
+    """Fija cfg[a][b]...[z] = value; un '*' en la ruta aplica a todos los elementos de una lista."""
     keys = path.split(".")
-    node = cfg
+    nodes = [cfg]
     for k in keys[:-1]:
-        node = node[k]
-    node[keys[-1]] = value
+        nodes = [item for n in nodes for item in (n if k == "*" else [n[k]])]
+    for n in nodes:
+        n[keys[-1]] = value
 
 
 def make_config(base, overrides, seed, duration, scale, image, out_path):

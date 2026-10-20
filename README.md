@@ -3,6 +3,76 @@
 Simulación concurrente de despacho de pedidos en la Zona Equipetrol, Santa Cruz de la Sierra.
 Proyecto final del curso LIA-221 Computación Concurrente, Paralela y Distribuida.
 
+## Esquema del programa
+
+Hilos, canales y datos compartidos tal como están en el código. Cada caja de hilo nombra el módulo
+que lo implementa; cada canal es un monitor (mutex y variable de condición) o un dato inmutable.
+
+```mermaid
+flowchart TB
+    subgraph hilos["Hilos"]
+        MAIN["principal<br/>main.cpp: arranque, ventana, apagado"]
+        GEN["generador (1)<br/>generator_thread"]
+        DISP["despachador por restaurante (9)<br/>dispatcher_thread"]
+        COUR["moto (N)<br/>courier_thread"]
+        LOG["escritor del log (1)<br/>event_logger"]
+        SIG["vigía de señales (1)<br/>stop_signal"]
+        POOL["pool de estimación (2 a 32)<br/>thread_pool"]
+        ASYNC["tareas async (al arrancar)<br/>distance_table_parallel"]
+    end
+    subgraph canales["Canales y monitores"]
+        BOOK[("libro de pedidos<br/>order_book: mutex + cv por restaurante")]
+        FLEET[("flota<br/>fleet: versión + cv, rescates pendientes")]
+        REST[("restaurante (9)<br/>restaurant: fila + puestos")]
+        CUR[("moto (N)<br/>courier: mutex, mochila, viaje")]
+        CVM[("cv de la moto<br/>courier_thread: mochila cambió, rescate")]
+        Q[("cola de eventos<br/>event_logger: mutex + cv")]
+        STOP[("señal de parada<br/>stop_signal: atomic + cv")]
+    end
+    subgraph datos["Datos inmutables (lectura sin cerrojo)"]
+        G["grafo, tabla de distancias, config, proyección, reloj, RouteMotion compartido"]
+    end
+    GEN -- "submit (move)" --> BOOK
+    BOOK -- "take por restaurante" --> DISP
+    DISP -- "snapshots (copias)" --> CUR
+    DISP -- "assign = reserve + orderAssigned" --> CVM
+    DISP -- "waitForChange" --> FLEET
+    COUR -- "enterQueue / waitForSlot / leaveSlot" --> REST
+    COUR -- "startTrip / endTrip / bagItems" --> CUR
+    COUR -- "onFreed, onReleased, onRescueNeeded" --> FLEET
+    FLEET -- "rescue(moto averiada)" --> CVM
+    FLEET -- "putBack (pedidos liberados)" --> BOOK
+    GEN & DISP & COUR & MAIN -- "publish" --> Q
+    Q --> LOG
+    SIG -- "request" --> STOP
+    MAIN -- "request al cerrar la ventana o cumplir durationS" --> STOP
+    STOP -. "waitUntil / waitFor" .-> GEN & COUR & DISP & MAIN
+    DISP -- "estimateAllPooled" --> POOL
+    MAIN -- "buildDistanceTableParallel" --> ASYNC
+    MAIN -- "views (copias)" --> CUR
+```
+
+Los datos inmutables (grafo, tabla de distancias, configuración, proyección, reloj una vez
+arrancado, y cada `RouteMotion` compartido por `shared_ptr`) los leen todos los hilos sin cerrojo;
+no se dibujan sus aristas para no cruzar el diagrama.
+
+| Hilo | Cuántos | Duerme en | Despierta por | Produce |
+|---|---|---|---|---|
+| principal | 1 | `waitKey` entre cuadros, o `StopSignal::waitUntil` sin ventana | fin de `durationS`, señal, ventana cerrada | cuadros; el apagado ordenado |
+| generador | 1 | `StopSignal::waitUntil` hasta la próxima ráfaga | el reloj simulado o la parada | pedidos al libro, `orderCreated`, `orderRejected` |
+| despachador | uno por restaurante | `OrderBook::take` (su cola) y `Fleet::waitForChange` (sin moto, con plazo) | pedido nuevo, entrega o reparación, cierre del libro, parada | reservas en las motos, `orderAssigned`, `orderReassigned`, `orderRejected` (`noCourier`) |
+| moto | `fleet.couriers` | su cv (mochila vacía), `Restaurant::waitForSlot`, `StopSignal::waitUntil` por tramo y espera | asignación o rescate, turno en la fila, el reloj simulado, la parada | viajes, recogidas, entregas, averías, traspasos y sus eventos |
+| escritor del log | 1 | cv de la cola de eventos | eventos publicados o cierre | líneas JSON del log y el resumen |
+| vigía de señales | 1 | `read` sobre un pipe | `SIGINT` o `SIGTERM` (el manejador escribe un byte) | `StopSignal::request` |
+| pool de estimación | 2 a 32 según el hardware | cv de la cola del pool | tareas enviadas o `stop` | estimaciones por `future` |
+| tareas async | tantas como orígenes, solo al arrancar | ninguna (fan-out/fan-in) | se unen al terminar | filas de la tabla de distancias |
+
+Orden de arranque: flota, despachadores, generador. Orden de apagado: `stop.request`, unir el
+generador, `simulationStopping`, cerrar el libro, unir despachadores, unir flota (despierta filas y
+cv de flota), vaciar el libro, cerrar el log. Ningún hilo espera a otro que dependa de uno que aún
+no se despertó, y ningún monitor llama a otro bajo su cerrojo salvo el traspaso entre dos motos,
+que toma los dos con `std::scoped_lock`.
+
 ## Compilación
 
 ```sh

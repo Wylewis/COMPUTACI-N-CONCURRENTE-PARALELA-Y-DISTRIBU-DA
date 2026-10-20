@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" font-family="Helvetica,Arial" font-size="12">
+<text x="60" y="22" font-size="14" font-weight="bold">Tiempo del map de estimaciones por tamaño del anillo (escala logarítmica)</text>
+<line x1="60" y1="40" x2="60" y2="250" stroke="#444"/>
+<line x1="60" y1="250" x2="620" y2="250" stroke="#444"/>
+<line x1="56" y1="250.0" x2="620" y2="250.0" stroke="#ddd"/>
+<text x="52" y="254.0" text-anchor="end" fill="#555">1</text>
+<line x1="56" y1="191.3" x2="620" y2="191.3" stroke="#ddd"/>
+<text x="52" y="195.3" text-anchor="end" fill="#555">10</text>
+<line x1="56" y1="132.6" x2="620" y2="132.6" stroke="#ddd"/>
+<text x="52" y="136.6" text-anchor="end" fill="#555">100</text>
+<line x1="56" y1="73.9" x2="620" y2="73.9" stroke="#ddd"/>
+<text x="52" y="77.9" text-anchor="end" fill="#555">1000</text>
+<text x="52" y="32" text-anchor="end" fill="#555">µs</text>
+<rect x="83.3" y="169.0" width="42.0" height="81.0" fill="#4a7ab5"/>
+<text x="104.3" y="165.0" text-anchor="middle" fill="#333" font-size="10">24</text>
+<rect x="130.0" y="135.0" width="42.0" height="115.0" fill="#d9822b"/>
+<text x="151.0" y="131.0" text-anchor="middle" fill="#333" font-size="10">91</text>
+<rect x="176.7" y="156.6" width="42.0" height="93.4" fill="#5aa469"/>
+<text x="197.7" y="152.6" text-anchor="middle" fill="#333" font-size="10">39</text>
+<text x="153.3" y="268" text-anchor="middle">8 candidatos</text>
+<rect x="270.0" y="104.1" width="42.0" height="145.9" fill="#4a7ab5"/>
+<text x="291.0" y="100.1" text-anchor="middle" fill="#333" font-size="10">306</text>
+<rect x="316.7" y="79.8" width="42.0" height="170.2" fill="#d9822b"/>
+<text x="337.7" y="75.8" text-anchor="middle" fill="#333" font-size="10">794</text>
+<rect x="363.3" y="96.9" width="42.0" height="153.1" fill="#5aa469"/>
+<text x="384.3" y="92.9" text-anchor="middle" fill="#333" font-size="10">405</text>
+<text x="340.0" y="268" text-anchor="middle">128</text>
+<rect x="456.7" y="67.2" width="42.0" height="182.8" fill="#4a7ab5"/>
+<text x="477.7" y="63.2" text-anchor="middle" fill="#333" font-size="10">1300</text>
+<rect x="503.3" y="45.9" width="42.0" height="204.1" fill="#d9822b"/>
+<text x="524.3" y="41.9" text-anchor="middle" fill="#333" font-size="10">2999</text>
+<rect x="550.0" y="62.8" width="42.0" height="187.2" fill="#5aa469"/>
+<text x="571.0" y="58.8" text-anchor="middle" fill="#333" font-size="10">1544</text>
+<text x="526.7" y="268" text-anchor="middle">512</text>
+<rect x="60" y="286" width="12" height="12" fill="#4a7ab5"/><text x="76" y="296">serie</text>
+<rect x="140" y="286" width="12" height="12" fill="#d9822b"/><text x="156" y="296">async por candidato</text>
+<rect x="332" y="286" width="12" height="12" fill="#5aa469"/><text x="348" y="296">pool</text>
+</svg>

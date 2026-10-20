@@ -3,6 +3,8 @@
 Simulación concurrente de despacho de pedidos en la Zona Equipetrol, Santa Cruz de la Sierra.
 Proyecto final del curso LIA-221 Computación Concurrente, Paralela y Distribuida.
 
+El informe final, con las herramientas, los experimentos y las dependencias, está en [INFORME.md](INFORME.md).
+
 ## Esquema del programa
 
 Hilos, canales y datos compartidos tal como están en el código. Cada caja de hilo nombra el módulo

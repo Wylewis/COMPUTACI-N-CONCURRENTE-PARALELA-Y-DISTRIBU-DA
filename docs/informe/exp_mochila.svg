@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" font-family="Helvetica,Arial" font-size="12">
+<text x="60" y="22" font-size="14" font-weight="bold">Mochila: entregas y tiempo medio de entrega en una hora simulada</text>
+<line x1="60" y1="40" x2="60" y2="250" stroke="#444"/>
+<line x1="60" y1="250" x2="620" y2="250" stroke="#444"/>
+<line x1="56" y1="201.4" x2="620" y2="201.4" stroke="#ddd"/>
+<text x="52" y="205.4" text-anchor="end" fill="#555">13.625</text>
+<line x1="56" y1="152.8" x2="620" y2="152.8" stroke="#ddd"/>
+<text x="52" y="156.8" text-anchor="end" fill="#555">27.25</text>
+<line x1="56" y1="104.2" x2="620" y2="104.2" stroke="#ddd"/>
+<text x="52" y="108.2" text-anchor="end" fill="#555">40.875</text>
+<line x1="56" y1="55.6" x2="620" y2="55.6" stroke="#ddd"/>
+<text x="52" y="59.6" text-anchor="end" fill="#555">54.5</text>
+<text x="52" y="32" text-anchor="end" fill="#555"></text>
+<rect x="83.3" y="87.7" width="42.0" height="162.3" fill="#4a7ab5"/>
+<text x="104.3" y="83.7" text-anchor="middle" fill="#333" font-size="10">45.5</text>
+<rect x="130.0" y="193.6" width="42.0" height="56.4" fill="#d9822b"/>
+<text x="151.0" y="189.6" text-anchor="middle" fill="#333" font-size="10">15.8</text>
+<text x="130.0" y="268" text-anchor="middle">mochila 1</text>
+<rect x="223.3" y="64.5" width="42.0" height="185.5" fill="#4a7ab5"/>
+<text x="244.3" y="60.5" text-anchor="middle" fill="#333" font-size="10">52</text>
+<rect x="270.0" y="177.6" width="42.0" height="72.4" fill="#d9822b"/>
+<text x="291.0" y="173.6" text-anchor="middle" fill="#333" font-size="10">20.3</text>
+<text x="270.0" y="268" text-anchor="middle">2</text>
+<rect x="363.3" y="55.6" width="42.0" height="194.4" fill="#4a7ab5"/>
+<text x="384.3" y="51.6" text-anchor="middle" fill="#333" font-size="10">54.5</text>
+<rect x="410.0" y="169.4" width="42.0" height="80.6" fill="#d9822b"/>
+<text x="431.0" y="165.4" text-anchor="middle" fill="#333" font-size="10">22.6</text>
+<text x="410.0" y="268" text-anchor="middle">3</text>
+<rect x="503.3" y="66.3" width="42.0" height="183.7" fill="#4a7ab5"/>
+<text x="524.3" y="62.3" text-anchor="middle" fill="#333" font-size="10">51.5</text>
+<rect x="550.0" y="160.4" width="42.0" height="89.6" fill="#d9822b"/>
+<text x="571.0" y="156.4" text-anchor="middle" fill="#333" font-size="10">25.1</text>
+<text x="550.0" y="268" text-anchor="middle">4</text>
+<rect x="60" y="286" width="12" height="12" fill="#4a7ab5"/><text x="76" y="296">entregados</text>
+<rect x="180" y="286" width="12" height="12" fill="#d9822b"/><text x="196" y="296">entrega media (min)</text>
+</svg>

@@ -51,6 +51,7 @@ private:
     const double speedKmh_;
     const std::int64_t acceptTimeoutMs_;
     const std::chrono::milliseconds quoteTimeout_;
+    const std::string estimator_;  // serial | async | pool
     ThreadPool& estimators_;
     EventLogger& logger_;
     const SimClock& clock_;

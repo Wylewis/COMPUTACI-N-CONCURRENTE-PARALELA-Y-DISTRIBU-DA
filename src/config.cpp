@@ -181,6 +181,7 @@ Config loadConfig(const std::string& path) {
         const json& dispatch = section(root, "", "dispatch");
         cfg.dispatch.quoteTimeoutMs = field<std::int64_t>(dispatch, "dispatch", "quoteTimeoutMs");
         cfg.dispatch.acceptTimeoutMs = field<std::int64_t>(dispatch, "dispatch", "acceptTimeoutMs");
+        if (dispatch.contains("estimator")) cfg.dispatch.estimator = field<std::string>(dispatch, "dispatch", "estimator");
     }
 
     {
@@ -198,6 +199,9 @@ Config loadConfig(const std::string& path) {
 }
 
 void validateConfig(const Config& cfg) {
+    if (cfg.dispatch.estimator != "serial" && cfg.dispatch.estimator != "async" && cfg.dispatch.estimator != "pool") {
+        throw ConfigError("dispatch.estimator debe ser serial, async o pool");
+    }
     if (cfg.nodes.empty()) {
         throw ConfigError("'nodes' debe tener al menos un nodo");
     }

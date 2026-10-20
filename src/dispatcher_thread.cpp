@@ -9,7 +9,8 @@ DispatcherThread::DispatcherThread(const RestaurantConfig& restaurant, OrderBook
                                    const Graph& graph, double speedKmh, const DispatchConfig& dispatch,
                                    ThreadPool& estimators, EventLogger& logger, const SimClock& clock, StopSignal& stop)
     : restaurant_(restaurant), book_(book), fleet_(fleet), graph_(graph), speedKmh_(speedKmh),
-      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), estimators_(estimators),
+      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), estimator_(dispatch.estimator),
+      estimators_(estimators),
       logger_(logger), clock_(clock), stop_(stop) {}
 
 DispatcherThread::~DispatcherThread() { join(); }
@@ -44,16 +45,23 @@ DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
         auto copy = std::make_shared<Order>();
         copy->id = order.id, copy->restaurantId = order.restaurantId, copy->deliveryNode = order.deliveryNode;
         copy->createdAtMs = order.createdAtMs, copy->readyAtMs = order.readyAtMs;
-        const Mapper concurrent = [&, copy](const std::vector<CourierSnapshot>& ring) {
-            AsyncEstimates r = estimateAllPooled(
-                ring,
-                [copy, this, now](const CourierSnapshot& c) { return estimateDelivery(c, *copy, restaurant_, graph_, speedKmh_, now); },
-                estimators_, quoteTimeout_);
-            lateQuotes_.fetch_add(r.late, std::memory_order_acq_rel);
-            return r.estimates;
+        const OneEstimate one = [copy, this, now](const CourierSnapshot& c) {
+            return estimateDelivery(c, *copy, restaurant_, graph_, speedKmh_, now);
         };
-        const auto sel = selectCourier(fleet_.snapshots(now), order, restaurant_, graph_, speedKmh_, now, kFirstRadiusM,
-                                       concurrent);
+        Mapper mapper;  // vacio: estimateAll en serie (experimento de despacho: serial | async | pool)
+        if (estimator_ == "pool")
+            mapper = [&](const std::vector<CourierSnapshot>& ring) {
+                AsyncEstimates r = estimateAllPooled(ring, one, estimators_, quoteTimeout_);
+                lateQuotes_.fetch_add(r.late, std::memory_order_acq_rel);
+                return r.estimates;
+            };
+        else if (estimator_ == "async")
+            mapper = [&](const std::vector<CourierSnapshot>& ring) {
+                AsyncEstimates r = estimateAllAsync(ring, one, quoteTimeout_);
+                lateQuotes_.fetch_add(r.late, std::memory_order_acq_rel);
+                return r.estimates;
+            };
+        const auto sel = selectCourier(fleet_.snapshots(now), order, restaurant_, graph_, speedKmh_, now, kFirstRadiusM, mapper);
         if (sel) {
             if (fleet_.assign(sel->estimate.courierId, order)) {
                 assigned_.fetch_add(1, std::memory_order_acq_rel);

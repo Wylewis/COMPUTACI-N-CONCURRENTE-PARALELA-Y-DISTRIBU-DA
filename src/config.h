@@ -63,6 +63,7 @@ struct OrdersConfig {
 struct DispatchConfig {
     std::int64_t quoteTimeoutMs = 0;   // tiempo real
     std::int64_t acceptTimeoutMs = 0;  // tiempo simulado
+    std::string estimator = "pool";  // serial | async | pool: como se calcula el map de estimaciones
 };
 
 struct IncidentsConfig {

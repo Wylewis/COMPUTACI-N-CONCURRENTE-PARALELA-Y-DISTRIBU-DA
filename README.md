@@ -377,6 +377,16 @@ por semilla, con `--no-window`; de cada corrida se toman el resumen final, el me
 verifica con `check_log.py`. La tabla muestra las medias por configuración y cuántas corridas
 terminaron bien; `ctest` incluye una corrida mínima del corredor.
 
+### Experimento de despacho
+
+`tools/reports/exp_despacho.md` compara el map de estimaciones en serie, con una tarea `std::async`
+por candidato y sobre el pool. `dispatch_bench` (se construye con `make dispatch_bench`) mide el map
+aislado para anillos de 1 a 512 candidatos y para estimaciones artificialmente caras, y el corredor
+de experimentos corre la simulación completa con cada variante usando la clave de configuración
+`dispatch.estimator` (`serial`, `async` o `pool`; por defecto `pool`). El reporte incluye el
+análisis con la ley de Amdahl con sobrecarga y el cambio de diseño de `async` a pool con su antes y
+después.
+
 ## Dependencias
 
 - cmake ≥ 3.11

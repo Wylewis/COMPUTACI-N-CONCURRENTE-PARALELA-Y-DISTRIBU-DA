@@ -387,6 +387,14 @@ de experimentos corre la simulación completa con cada variante usando la clave 
 análisis con la ley de Amdahl con sobrecarga y el cambio de diseño de `async` a pool con su antes y
 después.
 
+### Experimentos del sistema
+
+`tools/reports/exp_sistema.md` reúne cuatro experimentos: la tabla de distancias en serie frente a
+paralela por número de orígenes y el barrido de tareas (`distance_bench`, se construye con
+`make distance_bench`), y los puestos de recogida, la capacidad de la mochila y la probabilidad de
+avería variados uno a uno con el corredor sobre una hora simulada. El corredor admite `*` en la
+ruta de la clave para aplicar un valor a todos los elementos de una lista (`restaurants.*.pickupSlots`).
+
 ## Dependencias
 
 - cmake ≥ 3.11

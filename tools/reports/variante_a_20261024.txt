@@ -1,0 +1,87 @@
+Variante A, pedidos urgentes: corridas de comprobacion de la hoja
+fecha: Sat Oct 24 09:52:42 -04 2026
+maquina: Darwin 25.6.0 arm64, Apple M5 Pro, 18 hilos
+compilador: Apple clang version 21.0.0 (clang-2100.1.1.101)
+commit base: a665b15
+config: config/equipetrol.json con urgentProbability 0.3, agingMs 300000, una hora simulada a 600x; couriers 3 (hoja), 1 (CPU) y 8 (contraste)
+salida sin editar; solo las rutas del repositorio y del directorio temporal se abrevian como <repo> y <tmp>
+
+=== 1. tres motos, fin por tiempo cumplido (build normal) ===
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 3 repartidores; 630 aristas; mapa <repo>/data/equipetrol.png; log <tmp>/tres.log
+delivery_sim: tabla de distancias de 9 restaurantes en 108 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+delivery_sim: parada por tiempo cumplido a los 3602710 ms simulados; 204 rafagas, 416 pedidos creados, 130 rechazados al crear, 29 asignados (159 reintentos, 0 estimaciones tardias), 207 sin repartidor, 20 entregados, 0 averias, 0 rescates, 50 en el libro y 9 en mochilas
+{"created":416,"delivered":20,"rejected":337,"pending":59,"reassigned":0,"breakdowns":0,"avgDeliveryMs":1253453,"maxDeliveryMs":3299387,"deliveredPerCourier":{"c0":8,"c1":6,"c2":6},"urgentCreated":125,"urgentDelivered":5,"avgUrgentDeliveryMs":1502638}
+
+  lines: 855
+  created: 416
+  delivered: 20
+  rejected: 337
+  pending: 59
+  reassigned: 0
+  breakdowns: 0
+  stopping: 1
+  globalBackwards: 7
+  avgDeliveryMs: 1253453
+  maxDeliveryMs: 3299387
+  deliveredPerCourier: {'c0': 8, 'c1': 6, 'c2': 6}
+  urgentCreated: 125
+  urgentDelivered: 5
+  avgUrgentDeliveryMs: 1502638
+check_log: sin errores
+
+--- los dos casos que pide la hoja, buscados en el log ---
+caso 1, urgente creado despues de un normal y asignado antes que el:
+  o210 (r4, urgente) creado t=1869635, asignado t=1991479, espero 121 s
+  o198 (r4, normal) creado t=1786787, asignado t=2200352, espero 413 s
+caso 2, normal envejecido asignado mientras un urgente mas nuevo esperaba:
+  o78 (r7, normal) creado t=847470, asignado t=1308552, espero 461 s
+  o104 (r7, urgente) creado t=1171569, rechazado noCourier t=1772765
+
+--- urgentes contra normales en esta corrida (regla: envejecido > urgente > normal) ---
+urgentes: creados 125, asignados 9, noCourier 64, espera media hasta asignar 224 s
+normales: creados 291, asignados 20, noCourier 143, espera media hasta asignar 234 s
+misma corrida con la regla de la hoja (envejecidos dentro de la clase urgente, mas antiguo primero), solo para comparar:
+urgentes: creados 125, asignados 10, noCourier 67, espera media hasta asignar 368 s
+normales: creados 291, asignados 20, noCourier 147, espera media hasta asignar 305 s
+
+=== 2. una moto, mochila 1, uso de CPU mientras hay cola (ps -o %cpu,time cada 4 s, 60x) ===
+  0.1   0:00.05
+  0.0   0:00.06
+  0.0   0:00.07
+  0.0   0:00.08
+SIGINT a los 24 s reales:
+delivery_sim: parada por senal a los 1439773 ms simulados; 78 rafagas, 148 pedidos creados, 37 rechazados al crear, 4 asignados (24 reintentos, 0 estimaciones tardias), 58 sin repartidor, 3 entregados, 0 averias, 0 rescates, 49 en el libro y 1 en mochilas
+{"created":148,"delivered":3,"rejected":95,"pending":50,"reassigned":0,"breakdowns":0,"avgDeliveryMs":810715,"maxDeliveryMs":968154,"deliveredPerCourier":{"c0":3},"urgentCreated":49,"urgentDelivered":0,"avgUrgentDeliveryMs":0}
+
+check_log: sin errores
+
+=== 3. ThreadSanitizer, tres motos, fin por tiempo cumplido ===
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 3 repartidores; 630 aristas; mapa <repo>/data/equipetrol.png; log <tmp>/tsan_tiempo.log
+delivery_sim: tabla de distancias de 9 restaurantes en 579 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+delivery_sim: parada por tiempo cumplido a los 3602667 ms simulados; 204 rafagas, 416 pedidos creados, 132 rechazados al crear, 31 asignados (175 reintentos, 0 estimaciones tardias), 204 sin repartidor, 22 entregados, 0 averias, 0 rescates, 49 en el libro y 9 en mochilas
+{"created":416,"delivered":22,"rejected":336,"pending":58,"reassigned":0,"breakdowns":0,"avgDeliveryMs":1270699,"maxDeliveryMs":1986436,"deliveredPerCourier":{"c0":8,"c1":8,"c2":6},"urgentCreated":125,"urgentDelivered":4,"avgUrgentDeliveryMs":1134583}
+
+check_log: sin errores
+
+=== 4. ThreadSanitizer, tres motos, SIGINT a los 4 s reales (cierre en 0.17 s) ===
+delivery_sim: 320 nodos, 472 calles, 9 restaurantes, 3 repartidores; 630 aristas; mapa <repo>/data/equipetrol.png; log <tmp>/tsan_senal.log
+delivery_sim: tabla de distancias de 9 restaurantes en 470 us con 9 tareas
+delivery_sim: pool de estimacion de 18 hilos (hardware: 18, rango 2-32)
+delivery_sim: parada por senal a los 2287054 ms simulados; 126 rafagas, 264 pedidos creados, 76 rechazados al crear, 21 asignados (98 reintentos, 0 estimaciones tardias), 118 sin repartidor, 12 entregados, 0 averias, 0 rescates, 49 en el libro y 9 en mochilas
+{"created":264,"delivered":12,"rejected":194,"pending":58,"reassigned":0,"breakdowns":0,"avgDeliveryMs":1295606,"maxDeliveryMs":2130814,"deliveredPerCourier":{"c0":4,"c1":4,"c2":4},"urgentCreated":84,"urgentDelivered":3,"avgUrgentDeliveryMs":1059486}
+
+check_log: sin errores
+
+=== 5. ocho motos, contraste con menos saturacion ===
+delivery_sim: parada por tiempo cumplido a los 3600668 ms simulados; 204 rafagas, 416 pedidos creados, 118 rechazados al crear, 80 asignados (403 reintentos, 0 estimaciones tardias), 170 sin repartidor, 54 entregados, 1 averias, 0 rescates, 50 en el libro y 24 en mochilas
+{"created":416,"delivered":54,"rejected":288,"pending":74,"reassigned":2,"breakdowns":1,"avgDeliveryMs":1269575,"maxDeliveryMs":2797975,"deliveredPerCourier":{"c0":8,"c1":8,"c2":8,"c3":6,"c4":6,"c5":6,"c6":6,"c7":6},"urgentCreated":125,"urgentDelivered":16,"avgUrgentDeliveryMs":1121323}
+
+check_log: sin errores
+caso 1, urgente creado despues de un normal y asignado antes que el:
+  o269 (r0, urgente) creado t=2322683, asignado t=2343355, espero 20 s
+  o229 (r0, normal) creado t=2104955, asignado t=2478173, espero 373 s
+caso 2, normal envejecido asignado mientras un urgente mas nuevo esperaba:
+  o61 (r0, normal) creado t=517788, asignado t=1069783, espero 551 s
+  o68 (r0, urgente) creado t=729278, rechazado noCourier t=1328306

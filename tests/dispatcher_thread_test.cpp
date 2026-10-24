@@ -22,26 +22,35 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-Config lineCity(int couriers) {
+Config lineCity(int couriers, std::int64_t acceptMs, std::int64_t agingMs) {
     Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}, {"C", 0.0, 0.0134898}};
     cfg.streets = {{"ab", "A", "B", false}, {"bc", "B", "C", false}};
     cfg.restaurants = {{"r0", "Uno", "B", 1, 0, 0}, {"r1", "Dos", "C", 1, 0, 0}};
     cfg.fleet = {couriers, 1, 36.0, "A"};
     cfg.orders.maxPending = 10;
-    cfg.dispatch.acceptTimeoutMs = 3'600'000;
+    cfg.orders.agingMs = agingMs;
+    cfg.dispatch.acceptTimeoutMs = acceptMs;
     cfg.dispatch.quoteTimeoutMs = 200;
     return cfg;
 }
 
-OrderBatch batch(const std::vector<std::pair<std::string, std::string>>& idRestaurant, EventLogger& logger) {
+struct Spec {
+    std::string id, restaurant;
+    std::int64_t createdAt = 0;
+    bool urgent = false;
+};
+
+OrderBatch batch(const std::vector<Spec>& specs, EventLogger& logger) {
     OrderBatch b;
-    for (const auto& [id, r] : idRestaurant) {
+    for (const Spec& s : specs) {
         Order o;
-        o.id = id;
-        o.restaurantId = r;
+        o.id = s.id;
+        o.restaurantId = s.restaurant;
         o.deliveryNode = "C";
-        logger.publish(Event::orderCreated(0, id, r));
+        o.createdAtMs = s.createdAt;
+        o.urgent = s.urgent;
+        logger.publish(Event::orderCreated(s.createdAt, s.id, s.restaurant, s.urgent));
         b.orders.push_back(std::move(o));
     }
     return b;
@@ -50,6 +59,21 @@ OrderBatch batch(const std::vector<std::pair<std::string, std::string>>& idResta
 bool deliversAll(const Fleet& f, std::int64_t n) {
     for (int i = 0; i < 1000 && f.delivered() < n; ++i) std::this_thread::sleep_for(milliseconds(5));
     return f.delivered() == n;
+}
+
+bool assignsAtLeast(const DispatcherThread& d, std::int64_t n) {
+    for (int i = 0; i < 1000 && d.assigned() < n; ++i) std::this_thread::sleep_for(milliseconds(5));
+    return d.assigned() >= n;
+}
+
+std::vector<std::string> assignedOrder(const std::string& path) {
+    std::vector<std::string> out;
+    std::ifstream in(path);
+    for (std::string line; std::getline(in, line);) {
+        const json j = json::parse(line);
+        if (j.contains("event") && j["event"] == "orderAssigned") out.push_back(j["order"]);
+    }
+    return out;
 }
 
 struct Rig {
@@ -63,10 +87,11 @@ struct Rig {
     Restaurants restaurants;
     Fleet fleet;
     std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
-    Rig(const std::string& path, int couriers, const std::vector<int>& which, std::int64_t acceptMs = 3'600'000)
-        : cfg(lineCity(couriers)), graph(cfg), logger(path, Fleet::courierIds(couriers)), book(cfg),
+    Rig(const std::string& path, int couriers, const std::vector<int>& which, std::int64_t acceptMs = 3'600'000,
+        std::int64_t agingMs = 0)
+        : cfg(lineCity(couriers, acceptMs, agingMs)), graph(cfg), logger(path, Fleet::courierIds(couriers)), book(cfg),
           restaurants(cfg.restaurants), fleet(cfg.fleet, graph, restaurants, logger, clock, stop) {
-        cfg.dispatch.acceptTimeoutMs = acceptMs;
+        book.onSubmitted([this] { fleet.notifyChange(); });
         for (int r : which)
             dispatchers.push_back(std::make_unique<DispatcherThread>(cfg.restaurants[r], book, fleet, graph, 36.0,
                                                                       cfg.dispatch, estimators, logger, clock, stop));
@@ -118,10 +143,11 @@ int main() {
         Rig r(path, 1, {0});
         r.book.submit(batch({{"s1", "r0"}, {"s2", "r0"}}, r.logger));
         std::this_thread::sleep_for(milliseconds(30));
-        check(r.dispatchers[0]->assigned() == 1 && r.book.pending() == 0, "el primero asignado, el segundo en manos del despachador");
+        check(r.dispatchers[0]->assigned() == 1 && r.book.pending() == 1,
+              "el primero asignado, el segundo vuelve al libro mientras no hay moto");
         const auto before = steady_clock::now();
         r.shutdown();
-        check(steady_clock::now() - before < milliseconds(500) && r.book.pending() == 1, "la parada devuelve el pedido al libro");
+        check(steady_clock::now() - before < milliseconds(500) && r.book.pending() == 1, "la parada deja el pedido en el libro");
     }
     {
         Rig r(path, 1, {0}, 100'000);
@@ -139,6 +165,29 @@ int main() {
         check(r.dispatchers[0]->rejected() == 1 && reason == "noCourier" && rejectedT >= 100'000 && rejectedT < 200'000 &&
                   r.logger.summary().rejected == 1 && r.book.pending() == 0,
               "el segundo vence a los 100 s y se rechaza con noCourier; el resumen lo cuenta");
+    }
+    {
+        Rig r(path, 1, {0});
+        r.book.submit(batch({{"n1", "r0", 0, false}}, r.logger));
+        check(assignsAtLeast(*r.dispatchers[0], 1), "la moto sale con el normal");
+        r.book.submit(batch({{"n2", "r0", 1'000, false}, {"u1", "r0", 2'000, true}}, r.logger));
+        check(deliversAll(r.fleet, 3), "los tres se entregan");
+        r.shutdown();
+        check(assignedOrder(path) == std::vector<std::string>{"n1", "u1", "n2"},
+              "el urgente creado despues del normal se asigna antes que el");
+        check(r.dispatchers[0]->waits() < 20, "el despachador durmio, no dio vueltas");
+    }
+    {
+        Rig r(path, 1, {0}, 3'600'000, 50'000);
+        r.book.submit(batch({{"n1", "r0", 0, false}}, r.logger));
+        check(assignsAtLeast(*r.dispatchers[0], 1), "la moto sale con el normal");
+        r.book.submit(batch({{"n2", "r0", 1'000, false}, {"u1", "r0", 2'000, true}}, r.logger));
+        check(deliversAll(r.fleet, 3), "los tres se entregan");
+        r.shutdown();
+        check(assignedOrder(path) == std::vector<std::string>{"n1", "n2", "u1"},
+              "el normal envejecido pasa delante del urgente mas nuevo");
+        check(r.logger.summary().urgentCreated == 1 && r.logger.summary().urgentDelivered == 1,
+              "el resumen cuenta el urgente creado y entregado");
     }
     std::remove(path.c_str());
 

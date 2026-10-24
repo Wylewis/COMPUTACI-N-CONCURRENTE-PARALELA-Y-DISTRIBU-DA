@@ -55,6 +55,10 @@ OrderBatch OrderGenerator::next() {
         o.deliveryNode = deliveryNode;
         o.createdAtMs = batch.atMs;
         o.readyAtMs = batch.atMs + prep(rng_);
+        if (cfg_.orders.urgentProbability > 0.0) {
+            std::bernoulli_distribution urgent(std::min(1.0, cfg_.orders.urgentProbability));
+            o.urgent = urgent(rng_);
+        }
         if (!graph_.reachable(restaurantNode, deliveryNode)) {
             o.reject(RejectReason::Unreachable);
         }

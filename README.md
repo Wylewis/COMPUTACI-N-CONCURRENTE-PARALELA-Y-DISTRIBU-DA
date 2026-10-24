@@ -3,7 +3,65 @@
 Simulación concurrente de despacho de pedidos en la Zona Equipetrol, Santa Cruz de la Sierra.
 Proyecto final del curso LIA-221 Computación Concurrente, Paralela y Distribuida.
 
-El informe final, con las herramientas, los experimentos y las dependencias, está en [INFORME.md](INFORME.md).
+El informe final, con las herramientas, los experimentos y las dependencias, está en [INFORME.pdf](INFORME.pdf).
+
+## Pasos para correr todo
+
+Hace falta CMake 3.11 o superior, `make`, un compilador con C++17 (g++ 7 o clang equivalente) y
+Python 3 con su librería estándar. OpenCV es opcional: con él se abre la ventana del mapa; sin él
+todo lo demás funciona igual. No hay nada más que instalar: la única biblioteca externa viene en
+`third_party/`.
+
+1. Compilar, desde la raíz del repositorio:
+
+   ```sh
+   mkdir -p build && cd build
+   cmake .. && make
+   ```
+
+2. Correr la simulación con la ventana del mapa. Dura una hora simulada, un minuto real, y al
+   terminar imprime el resumen en una línea JSON y deja `events.log` en `build`. Se puede cortar
+   antes con Ctrl+C o cerrando la ventana.
+
+   ```sh
+   ./delivery_sim ../config/equipetrol.json
+   ```
+
+3. Verificar que el log de esa corrida cumple las reglas, pedido por pedido:
+
+   ```sh
+   python3 ../tools/check_log.py events.log --config ../config/equipetrol.json
+   ```
+
+   Termina con `check_log: sin errores`.
+
+4. Correr las 30 pruebas automáticas:
+
+   ```sh
+   ctest --output-on-failure
+   ```
+
+   Termina con `100% tests passed, 0 tests failed out of 30`.
+
+5. Correr el escenario de pedidos urgentes, verificar el log con el resumen y mostrar los dos casos
+   de prioridad en el log:
+
+   ```sh
+   ./delivery_sim ../config/urgentes_3_motos.json --no-window --log urgentes.log > resumen.txt
+   python3 ../tools/check_log.py urgentes.log --summary resumen.txt --config ../config/urgentes_3_motos.json
+   python3 ../tools/urgent_cases.py urgentes.log
+   ```
+
+6. Opcional, las herramientas de concurrencia y memoria, desde la raíz del repositorio. La primera
+   construye con ThreadSanitizer en `build/tsan` y corre tres escenarios; la segunda necesita Docker
+   y corre AddressSanitizer con LeakSanitizer en Linux. Las dos dejan su reporte en `tools/reports/`.
+
+   ```sh
+   sh tools/run_tsan.sh
+   sh tools/run_asan_linux.sh
+   ```
+
+Todo lo que sigue es el detalle de cada parte.
 
 ## Compilación
 
@@ -26,8 +84,8 @@ sh tools/run_asan_linux.sh           # AddressSanitizer y LeakSanitizer en Linux
 python3 tools/check_log.py events.log --config config/equipetrol.json
 ```
 
-`tools/check_log.py` verifica un log y su resumen contra las reglas de las secciones 4, 6 y 7, como
-lo hará el evaluador. Los reportes sin editar de las dos herramientas están en `tools/reports/`.
+`tools/check_log.py` verifica un log y su resumen contra las reglas de las secciones 4, 6 y 7 del
+enunciado. Los reportes sin editar de las dos herramientas están en `tools/reports/`.
 
 ## Esquema del programa
 
@@ -100,7 +158,7 @@ no se despertó, y ningún monitor llama a otro bajo su cerrojo salvo el traspas
 que toma los dos con `std::scoped_lock`.
 ## Módulos
 
-Cada módulo tiene su prueba en `tests/` y su explicación en [INFORME.md](INFORME.md) y en el mapa
+Cada módulo tiene su prueba en `tests/` y su explicación en [INFORME.pdf](INFORME.pdf) y en el mapa
 de conceptos de abajo. El código no lleva comentarios a propósito: esta tabla y el mapa son la
 explicación.
 
@@ -109,13 +167,13 @@ explicación.
 | `config` | Lee y valida el JSON (sección 5 del enunciado); sale con error antes de simular si algo falta o apunta a un nodo inexistente. |
 | `order` | El pedido: estados `created → assigned → pickedUp → delivered`, `rejected`, `pending`; solo movible, así existe en un único lugar a la vez. |
 | `sim_clock` | Reloj simulado sobre `steady_clock` con `timeScale`; inmutable tras arrancar. |
-| `event_log`, `event_logger` | Los eventos de la sección 6.2 y el resumen 6.3; una cola productor-consumidor con un solo hilo escritor, una línea JSON por evento. |
+| `event_log`, `event_logger` | Los eventos de la sección 6.2 (`orderCreated` lleva `urgent`) y el resumen 6.3 más `urgentCreated`, `urgentDelivered` y `avgUrgentDeliveryMs`; una cola productor-consumidor con un solo hilo escritor, una línea JSON por evento. |
 | `graph`, `distance_table`, `distance_table_parallel` | Grafo dirigido de calles con Dijkstra; tabla de distancias en serie y en paralelo (una tarea `std::async` por grupo de orígenes, escrituras disjuntas). |
 | `map_projection`, `route_motion` | Lat/lon a píxel; posición de una moto sobre su ruta en cualquier instante, objeto inmutable compartido por `shared_ptr`. |
-| `order_generator`, `generator_thread` | Pedidos a intervalos exponenciales con ráfagas, reproducibles por semilla; el hilo que los mete al libro durmiendo en la señal de parada. |
-| `order_book` | Monitor con un mutex y una cola por restaurante con su variable de condición; límite `maxPending` global; posición en cola por scan exclusivo. |
+| `order_generator`, `generator_thread` | Pedidos a intervalos exponenciales con ráfagas, urgentes con `urgentProbability`, reproducibles por semilla; el hilo que los mete al libro durmiendo en la señal de parada. |
+| `order_book` | Monitor con un mutex y una cola por restaurante con su variable de condición; límite `maxPending` global; posición en cola por scan exclusivo. `take` elige por prioridad bajo el candado (envejecido, urgente, normal; dentro de cada nivel el más antiguo), `nextWakeMs` da el próximo plazo de la cola y `takeExpired` saca los vencidos. |
 | `estimate`, `dispatch_select` | Estimación de entrega como función pura sobre una copia de la moto; selección por anillos de radio creciente con map (serie, `async` o pool) y reduce. |
-| `dispatcher_thread` | Un hilo por restaurante: toma de su cola, copia la flota, estima en el pool, reserva; reintenta si otro ganó la moto; `noCourier` al vencer `acceptTimeoutMs`. |
+| `dispatcher_thread` | Un hilo por restaurante: rechaza los vencidos de su cola, toma por prioridad, copia la flota, estima en el pool, reserva; reintenta si otro ganó la moto; sin moto devuelve el pedido al libro y duerme hasta que algo cambie o venza el próximo plazo. |
 | `courier`, `courier_thread` | La moto como monitor (mochila con reserva atómica, copias para estimar y dibujar, traspaso con `scoped_lock`) y su hilo (duerme en su cv, viaja tramo a tramo, hace fila, recoge, entrega el destino más cercano, se avería y rescata). |
 | `restaurant`, `restaurants` | Monitor con `pickupSlots` puestos y fila por orden de llegada; espera prevista por scan. |
 | `fleet` | Dueña de motos e hilos; copias de la flota; versión más cv para esperar sin sondeo; elección de la moto de rescate. |
@@ -198,6 +256,55 @@ paralela por número de orígenes y el barrido de tareas (`distance_bench`, se c
 `make distance_bench`), y los puestos de recogida, la capacidad de la mochila y la probabilidad de
 avería variados uno a uno con el corredor sobre una hora simulada. El corredor admite `*` en la
 ruta de la clave para aplicar un valor a todos los elementos de una lista (`restaurants.*.pickupSlots`).
+## Pedidos urgentes
+
+Extensión del enunciado: algunos pedidos son urgentes y el despachador los atiende antes; un
+normal que espera más de `agingMs` envejece y pasa a tratarse con prioridad. Dos propiedades
+opcionales en `orders` del config, con valor por defecto 0: `urgentProbability` (en [0, 1]) y
+`agingMs` (entero simulado, 0 = sin envejecimiento).
+
+- El orden lo decide `OrderBook::take` bajo el candado del libro, en el momento de sacar: primero
+  los envejecidos (normales con `ahora − creación ≥ agingMs`), después los urgentes, después los
+  normales; dentro de cada nivel el más antiguo, y a igual instante el id menor. Que el envejecido
+  vaya por encima del urgente es una decisión propia: el envejecimiento existe para que nadie
+  espere para siempre.
+- Si no hay moto con lugar, el despachador devuelve el pedido al libro y duerme en la flota hasta
+  que entre un pedido, una moto libere lugar, venza el próximo plazo de su cola (el
+  `acceptTimeoutMs` o el envejecimiento más cercano, calculado por el libro) o se pida parar. Al
+  despertar rechaza con `noCourier` los vencidos que nunca tuvieron moto y vuelve a elegir.
+- `orderCreated` lleva `"urgent": true|false`; el resumen agrega `urgentCreated`,
+  `urgentDelivered` y `avgUrgentDeliveryMs`, y `check_log.py` los recalcula desde el log.
+
+### Cómo comprobarlo
+
+Dos configuraciones listas, derivadas de `config/equipetrol.json`: `config/urgentes_3_motos.json`
+(`urgentProbability` 0.3, `agingMs` 300000, 3 motos, para que se forme cola) y
+`config/urgentes_1_moto.json` (lo mismo con 1 moto y mochila 1, sin fin por tiempo). Desde `build`:
+
+```sh
+./delivery_sim ../config/urgentes_3_motos.json --no-window --log urgentes.log > resumen.txt
+python3 ../tools/check_log.py urgentes.log --summary resumen.txt --config ../config/urgentes_3_motos.json
+python3 ../tools/urgent_cases.py urgentes.log
+```
+
+La primera línea corre una hora simulada (un minuto real) y deja el log y el resumen; la segunda
+verifica el log y recalcula los tres contadores de urgentes; la tercera busca y muestra los dos
+casos de prioridad: un urgente creado después de un normal y asignado mientras ese normal
+seguía esperando, y un normal envejecido asignado mientras un urgente más nuevo seguía esperando. Para ver los urgentes
+en el log, `grep '"urgent":true' urgentes.log`.
+
+Para comprobar que el despachador duerme y no gira, con una sola moto y cola de pedidos:
+
+```sh
+./delivery_sim ../config/urgentes_1_moto.json --no-window --log una.log &
+sleep 10; ps -o %cpu,time -p $!; kill -INT $!
+```
+
+El uso de CPU del proceso queda en 0 %; la señal lo cierra en milisegundos y el log pasa el
+verificador. Con ThreadSanitizer, `cmake -DENABLE_TSAN=ON .. && make` en otra carpeta y los mismos
+comandos. Las corridas hechas con estos comandos, incluidas las de ThreadSanitizer, están sin editar en
+`tools/reports/variante_a_20261024.txt`.
+
 ## Mapa y datos
 
 La imagen es de OpenStreetMap, recortada al polígono de la zona entre el Segundo y el Cuarto Anillo

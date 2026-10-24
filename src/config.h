@@ -56,6 +56,8 @@ struct OrdersConfig {
     int burstMax = 1;
     int maxPending = 0;
     std::uint64_t seed = 0;
+    double urgentProbability = 0.0;
+    std::int64_t agingMs = 0;
 };
 
 struct DispatchConfig {

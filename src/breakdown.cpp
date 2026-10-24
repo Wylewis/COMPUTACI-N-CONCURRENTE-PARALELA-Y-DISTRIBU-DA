@@ -7,7 +7,7 @@ std::mt19937_64 seededFor(std::uint64_t seed, std::size_t courierIndex) {
     std::seed_seq seq{static_cast<std::uint64_t>(seed), static_cast<std::uint64_t>(courierIndex + 1)};
     return std::mt19937_64(seq);
 }
-}  // namespace
+}
 
 BreakdownRoll::BreakdownRoll(std::uint64_t seed, std::size_t courierIndex, double probabilityPerTrip)
     : rng_(seededFor(seed, courierIndex)), breaks_(std::clamp(probabilityPerTrip, 0.0, 1.0)) {}

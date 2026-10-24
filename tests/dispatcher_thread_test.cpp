@@ -22,7 +22,6 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-// A ---1000 m--- B ---500 m--- C, doble sentido; r0 en B, r1 en C; flota en A
 Config lineCity(int couriers) {
     Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}, {"C", 0.0, 0.0134898}};
@@ -84,12 +83,12 @@ struct Rig {
     }
 };
 
-}  // namespace
+}
 
 int main() {
     const std::string path = "dispatcher_thread_test.tmp.log";
 
-    {   // dos motos de mochila 1 y tres pedidos: el tercero espera a que una entrega libere lugar, sin sondeo
+    {
         Rig r(path, 2, {0});
         r.book.submit(batch({{"p1", "r0"}, {"p2", "r0"}, {"p3", "r0"}}, r.logger));
         check(deliversAll(r.fleet, 3) && r.book.pending() == 0, "los tres pedidos se entregan");
@@ -106,7 +105,7 @@ int main() {
               "la tercera asignacion llega despues de la primera entrega, tras dormir por la flota");
         check(r.dispatchers[0]->assigned() == 3 && r.logger.summary().delivered == 3, "contadores del despachador y resumen");
     }
-    {   // dos despachadores compiten por una sola moto: uno espera; ambos pedidos se entregan
+    {
         Rig r(path, 1, {0, 1});
         r.book.submit(batch({{"q1", "r0"}, {"q2", "r1"}}, r.logger));
         check(deliversAll(r.fleet, 2), "con una moto para dos restaurantes se entregan los dos");
@@ -115,7 +114,7 @@ int main() {
                   r.dispatchers[0]->waits() + r.dispatchers[1]->waits() >= 1,
               "cada despachador asigno el suyo y alguno tuvo que esperar");
     }
-    {   // parada con un pedido esperando moto: vuelve al libro y el despachador sale en el acto
+    {
         Rig r(path, 1, {0});
         r.book.submit(batch({{"s1", "r0"}, {"s2", "r0"}}, r.logger));
         std::this_thread::sleep_for(milliseconds(30));
@@ -124,7 +123,7 @@ int main() {
         r.shutdown();
         check(steady_clock::now() - before < milliseconds(500) && r.book.pending() == 1, "la parada devuelve el pedido al libro");
     }
-    {   // una moto, dos pedidos y plazo de 100 s simulados: el segundo se rechaza con noCourier al vencer
+    {
         Rig r(path, 1, {0}, 100'000);
         r.book.submit(batch({{"n1", "r0"}, {"n2", "r0"}}, r.logger));
         check(deliversAll(r.fleet, 1) && r.dispatchers[0]->assigned() == 1, "el primero se entrega");

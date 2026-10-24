@@ -8,10 +8,10 @@ cv::Point px(const MapProjection& proj, double lat, double lon) {
     const Pixel p = proj.toPixel(lat, lon);
     return {static_cast<int>(p.x), static_cast<int>(p.y)};
 }
-}  // namespace
+}
 
 cv::Scalar stateColor(CourierState state) {
-    switch (state) {  // BGR
+    switch (state) {
         case CourierState::Idle:         return {140, 140, 140};
         case CourierState::ToRestaurant: return {220, 120, 0};
         case CourierState::Queued:       return {0, 200, 230};

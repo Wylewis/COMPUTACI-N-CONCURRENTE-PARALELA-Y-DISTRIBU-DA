@@ -1,9 +1,3 @@
-// Prueba de estres: probabilidad de averia 1, muchas motos y pedidos, dos
-// restaurantes. Todo se averia en cada viaje: liberaciones, reasignaciones,
-// rescates que tambien se averian y reparaciones encadenadas. Lo que se
-// exige: que nada se cuelgue (el apagado termina en menos de 5 s), que los
-// contadores cuadren y que el log quede verificable. Se corre bajo
-// ThreadSanitizer para buscar carreras. Recibe la ruta del log.
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -25,7 +19,6 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-// A --- B --- C --- D --- E en linea, 500 m entre vecinos, doble sentido; restaurantes en B y D
 Config city(int couriers) {
     Config cfg;
     const char* ids[] = {"A", "B", "C", "D", "E"};
@@ -40,7 +33,7 @@ Config city(int couriers) {
     return cfg;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     const std::string path = argc > 1 ? argv[1] : "breakdown_stress_test.tmp.log";
@@ -63,7 +56,7 @@ int main(int argc, char** argv) {
     fleet.start();
     for (auto& d : dispatchers) d->start();
     const char* dests[] = {"A", "C", "E"};
-    for (int batchNo = 0; batchNo < kOrders / 20; ++batchNo) {  // 20 pedidos por rafaga, alternando restaurante
+    for (int batchNo = 0; batchNo < kOrders / 20; ++batchNo) {
         OrderBatch batch;
         batch.atMs = clock.nowMs();
         for (int i = 0; i < 20; ++i) {

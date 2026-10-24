@@ -24,14 +24,13 @@ void ThreadPool::workerLoop() {
         std::function<void()> job;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            // Duerme hasta que haya trabajo o se este parando. El predicado
-            // cubre los despertares sin novedad y el despertar final.
+
             available_.wait(lock, [this] { return stopping_ || !jobs_.empty(); });
-            if (jobs_.empty()) return;  // parando y sin nada pendiente
+            if (jobs_.empty()) return;
             job = std::move(jobs_.front());
             jobs_.pop_front();
         }
-        job();  // fuera del cerrojo: otros hilos pueden tomar trabajos mientras tanto
+        job();
     }
 }
 
@@ -41,7 +40,7 @@ void ThreadPool::stop() {
         if (stopping_) return;
         stopping_ = true;
     }
-    available_.notify_all();  // todos deben revisar la bandera, no solo uno
+    available_.notify_all();
     for (std::thread& t : workers_) {
         if (t.joinable()) t.join();
     }

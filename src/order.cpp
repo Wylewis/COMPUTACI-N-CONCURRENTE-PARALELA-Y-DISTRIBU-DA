@@ -43,7 +43,7 @@ bool isFinal(OrderState state) {
 
 bool canTransition(OrderState from, OrderState to) {
     if (isFinal(from)) return false;
-    if (to == OrderState::Pending) return true;  // la simulacion termino antes
+    if (to == OrderState::Pending) return true;
     switch (from) {
         case OrderState::Created:
             return to == OrderState::Assigned || to == OrderState::Rejected;

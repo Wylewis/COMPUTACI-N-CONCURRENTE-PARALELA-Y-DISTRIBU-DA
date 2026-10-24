@@ -22,13 +22,12 @@ void GeneratorThread::join() {
 
 void GeneratorThread::run() {
     while (!stop_.requested()) {
-        // Dormir hasta la proxima rafaga en tiempo simulado, o hasta la parada.
+
         if (stop_.waitUntil(clock_.realTimeFor(generator_.nextAtMs()))) return;
 
         OrderBatch batch = generator_.next();
         batches_.fetch_add(1, std::memory_order_acq_rel);
 
-        // Los pedidos se mueven al libro; lo que hace falta para el log se copia antes.
         struct Created {
             std::string id;
             std::string restaurant;

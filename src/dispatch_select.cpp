@@ -50,7 +50,7 @@ AsyncEstimates collect(std::vector<std::future<Estimate>> futures, std::chrono::
     }
     return out;
 }
-}  // namespace
+}
 
 AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
                                 std::chrono::milliseconds quoteTimeout) {
@@ -58,7 +58,7 @@ AsyncEstimates estimateAllAsync(const std::vector<CourierSnapshot>& candidates, 
     futures.reserve(candidates.size());
     for (const CourierSnapshot& c : candidates)
         futures.push_back(std::async(std::launch::async, [one, c] { return one(c); }));
-    return collect(std::move(futures), quoteTimeout);  // los futures tardios se unen al destruirse: ver D46.3
+    return collect(std::move(futures), quoteTimeout);
 }
 
 AsyncEstimates estimateAllPooled(const std::vector<CourierSnapshot>& candidates, const OneEstimate& one,
@@ -68,7 +68,6 @@ AsyncEstimates estimateAllPooled(const std::vector<CourierSnapshot>& candidates,
     for (const CourierSnapshot& c : candidates) futures.push_back(pool.submit([one, c] { return one(c); }));
     return collect(std::move(futures), quoteTimeout);
 }
-
 
 std::optional<Estimate> bestEstimate(const std::vector<Estimate>& estimates) {
     if (estimates.empty()) return std::nullopt;
@@ -84,7 +83,7 @@ std::optional<Selection> selectCourier(const std::vector<CourierSnapshot>& fleet
     for (const CourierSnapshot& c : fleet) farthestM = std::max(farthestM, straightLineM(graph, c.node, restaurant.node));
 
     Selection sel;
-    double innerM = -1.0;  // el primer anillo incluye distancia cero
+    double innerM = -1.0;
     for (double outerM = firstRadiusM;; innerM = outerM, outerM *= 2.0) {
         ++sel.rings;
         const std::vector<CourierSnapshot> ring = ringCandidates(fleet, graph, restaurant.node, innerM, outerM);

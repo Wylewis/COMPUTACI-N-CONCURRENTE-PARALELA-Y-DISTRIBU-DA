@@ -26,10 +26,10 @@ std::vector<int> sequence(std::uint64_t seed, std::size_t courier, double p, int
     return out;
 }
 
-}  // namespace
+}
 
 int main() {
-    {   // probabilidad 0: nunca; probabilidad 1: siempre, en un tramo valido
+    {
         BreakdownRoll never(7, 0, 0.0), always(7, 0, 1.0);
         bool ok0 = true, ok1 = true;
         std::set<std::size_t> legs;
@@ -43,12 +43,12 @@ int main() {
         check(ok1 && always.breakdowns() == 1000 && legs.size() == 3, "con probabilidad 1 todas, y el tramo recorre los tres");
         check(!always.roll(0) && always.trips() == 1000, "un viaje sin tramos no se sortea");
     }
-    {   // frecuencia: 2 % de 10000 viajes son unos 200 (margen de 3 sigma, 42)
+    {
         BreakdownRoll r(42, 3, 0.02);
         for (int i = 0; i < 10000; ++i) r.roll(5);
         check(r.breakdowns() > 150 && r.breakdowns() < 250, "la frecuencia observada ronda la probabilidad");
     }
-    {   // reproducible por semilla e indice; distinto entre motos y entre semillas
+    {
         const auto a = sequence(42, 0, 0.3, 200), b = sequence(42, 0, 0.3, 200);
         check(a == b, "la misma semilla y moto dan la misma secuencia");
         check(sequence(42, 1, 0.3, 200) != a && sequence(43, 0, 0.3, 200) != a, "otra moto u otra semilla dan otra secuencia");

@@ -1,7 +1,3 @@
-// Pruebas del libro de pedidos: scan exclusivo, posiciones por restaurante,
-// limite maxPending en un solo paso, unreachable que no cuenta, take que
-// duerme hasta que haya pedido o se cierre, FIFO por restaurante, putBack al
-// frente, drain, y muchos productores con un despachador por restaurante.
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -51,10 +47,10 @@ OrderBatch batchOf(std::vector<Order> orders, std::int64_t t = 0) {
     return b;
 }
 
-}  // namespace
+}
 
 int main() {
-    // Scan exclusivo
+
     {
         const auto out = exclusiveScan({1, 0, 1, 1, 0, 1});
         check(out == std::vector<std::size_t>{0, 1, 1, 2, 3, 3}, "scan exclusivo de ceros y unos");
@@ -62,7 +58,6 @@ int main() {
         check(exclusiveScan({5}) == std::vector<std::size_t>{0}, "scan de un elemento es 0");
     }
 
-    // Posiciones por restaurante con colas vacias y con pedidos previos
     {
         OrderBook book(cityWith(50));
         std::vector<Order> first;
@@ -89,11 +84,10 @@ int main() {
         check(pos == std::vector<std::size_t>{3, 0, 4}, "la posicion suma lo que ya habia en la cola");
     }
 
-    // Limite global, en un solo paso, y unreachable que no cuenta
     {
         OrderBook book(cityWith(3));
         std::vector<Order> b;
-        b.push_back(make("u", "r0", true));  // unreachable: pasa sin contar
+        b.push_back(make("u", "r0", true));
         for (int i = 0; i < 5; ++i) b.push_back(make("o" + std::to_string(i), "r" + std::to_string(i % 3)));
         const SubmitOutcome out = book.submit(batchOf(std::move(b)));
         check(out.accepted.size() == 3, "entran exactamente maxPending");
@@ -105,7 +99,7 @@ int main() {
         }
         check(unreachable == 1 && full == 2, "1 unreachable (venia asi) y 2 queueFull");
         check(book.pending() == 3, "pending es 3");
-        // Al sacar uno vuelve a haber lugar
+
         auto taken = book.take("r0");
         check(taken.has_value(), "take devuelve el pedido de r0");
         std::vector<Order> one;
@@ -113,7 +107,6 @@ int main() {
         check(book.submit(batchOf(std::move(one))).accepted.size() == 1, "tras un take hay lugar otra vez");
     }
 
-    // FIFO por restaurante y putBack al frente
     {
         OrderBook book(cityWith(50));
         std::vector<Order> b;
@@ -129,16 +122,15 @@ int main() {
         check(book.take("r0")->id == "2" && book.take("r0")->id == "3", "el resto sigue en orden");
     }
 
-    // take duerme hasta que llega un pedido; close despierta a todos
     {
         OrderBook book(cityWith(50));
         std::atomic<int> got{0}, empty{0};
         std::vector<std::thread> dispatchers;
         for (const std::string rid : {"r0", "r1", "r2"}) {
             dispatchers.emplace_back([&, rid] {
-                auto o = book.take(rid);  // duerme: no hay nada
+                auto o = book.take(rid);
                 if (o) got.fetch_add(1); else empty.fetch_add(1);
-                auto o2 = book.take(rid);  // segunda espera: la cierra close()
+                auto o2 = book.take(rid);
                 if (o2) got.fetch_add(1); else empty.fetch_add(1);
             });
         }
@@ -162,7 +154,6 @@ int main() {
               "con el libro cerrado no entra nada");
     }
 
-    // drain saca todo lo pendiente
     {
         OrderBook book(cityWith(50));
         std::vector<Order> b;
@@ -172,7 +163,6 @@ int main() {
         check(left.size() == 7 && book.pending() == 0, "drain devuelve los 7 y deja el libro vacio");
     }
 
-    // Restaurante desconocido
     {
         OrderBook book(cityWith(50));
         bool threw = false;
@@ -180,7 +170,6 @@ int main() {
         check(threw, "take de un restaurante desconocido lanza");
     }
 
-    // Estres: 4 productores, 3 despachadores, nada se pierde ni se duplica
     {
         OrderBook book(cityWith(1000));
         std::atomic<int> taken{0};

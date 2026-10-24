@@ -14,7 +14,6 @@ std::string join(const std::string& path, const std::string& key) {
     return path.empty() ? key : path + "." + key;
 }
 
-// Devuelve el subobjeto `key` de `obj`, que debe existir y ser un objeto JSON.
 const json& section(const json& obj, const std::string& path, const char* key) {
     const std::string full = join(path, key);
     auto it = obj.find(key);
@@ -27,7 +26,6 @@ const json& section(const json& obj, const std::string& path, const char* key) {
     return *it;
 }
 
-// Devuelve el array `key` de `obj`, que debe existir y ser un array JSON.
 const json& array(const json& obj, const std::string& path, const char* key) {
     const std::string full = join(path, key);
     auto it = obj.find(key);
@@ -40,8 +38,6 @@ const json& array(const json& obj, const std::string& path, const char* key) {
     return *it;
 }
 
-// Lee la propiedad `key` de `obj` convertida al tipo T, con un mensaje claro
-// si falta o si su tipo no corresponde.
 template <class T>
 T field(const json& obj, const std::string& path, const char* key) {
     const std::string full = join(path, key);
@@ -73,7 +69,7 @@ std::string directoryOf(const std::string& path) {
     return path.substr(0, slash);
 }
 
-}  // namespace
+}
 
 std::string Config::imagePath() const {
     if (!map.image.empty() && map.image.front() == '/') return map.image;

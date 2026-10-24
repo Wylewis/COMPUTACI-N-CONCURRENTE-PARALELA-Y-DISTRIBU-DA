@@ -19,7 +19,7 @@ bool EventLogger::publish(Event event) {
         queue_.push_back(std::move(event));
     }
     published_.fetch_add(1, std::memory_order_acq_rel);
-    available_.notify_one();  // hay un solo consumidor: basta despertarlo a el
+    available_.notify_one();
     return true;
 }
 
@@ -29,10 +29,10 @@ void EventLogger::writerLoop() {
         {
             std::unique_lock<std::mutex> lock(mutex_);
             available_.wait(lock, [this] { return closed_ || !queue_.empty(); });
-            if (queue_.empty()) return;  // cerrado y sin nada pendiente
-            batch.swap(queue_);          // toma todo lo pendiente de una vez
+            if (queue_.empty()) return;
+            batch.swap(queue_);
         }
-        // Escritura a disco fuera del cerrojo: los productores no esperan al disco.
+
         for (const Event& e : batch) {
             log_.write(e);
             written_.fetch_add(1, std::memory_order_acq_rel);

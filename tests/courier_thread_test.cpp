@@ -25,7 +25,6 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-// A ---1000 m--- B ---500 m--- C, doble sentido; restaurante r0 en B
 Config lineCity() {
     Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}, {"C", 0.0, 0.0134898}};
@@ -43,7 +42,6 @@ Order created(const std::string& id, const std::string& delivery, EventLogger& l
     return o;
 }
 
-// (evento, pedido) de cada linea del log, sin el resumen
 std::vector<std::pair<std::string, std::string>> events(const std::string& path) {
     std::vector<std::pair<std::string, std::string>> out;
     std::ifstream in(path);
@@ -57,7 +55,7 @@ bool deliversAll(const CourierThread& t, std::int64_t n) {
     return t.delivered() == n;
 }
 
-struct Rig {  // una moto con su hilo, reloj a escala y log propio
+struct Rig {
     SimClock clock;
     StopSignal stop;
     EventLogger logger;
@@ -72,14 +70,14 @@ struct Rig {  // una moto con su hilo, reloj a escala y log propio
     }
 };
 
-}  // namespace
+}
 
 int main() {
     const Config cfg = lineCity();
     const Graph g(cfg);
     const std::string path = "courier_thread_test.tmp.log";
 
-    {   // ciclo completo: recogida en B, entrega en B (mas cercano) y luego en C
+    {
         Rig r(path, "c0", 2, cfg, g);
         Order far = created("far", "C", r.logger), near = created("near", "B", r.logger), extra = created("x", "C", r.logger);
         check(r.thread.assign(far) && r.thread.assign(near) && !r.thread.assign(extra) && extra.id == "x",
@@ -96,8 +94,8 @@ int main() {
         check(events(path) == expected, "secuencia exacta de eventos, el destino mas cercano primero");
         check(r.logger.summary().delivered == 2 && r.logger.summary().deliveredPerCourier.at("c0") == 2, "resumen con 2 entregas");
     }
-    {   // parada en mitad de un tramo: sale en el acto y queda en el ultimo nodo alcanzado
-        Rig r(path, "c1", 1, cfg, g, 100.0);  // el tramo dura 1 s real: la carga de la maquina no lo adelanta
+    {
+        Rig r(path, "c1", 1, cfg, g, 100.0);
         Order o = created("o", "C", r.logger);
         r.thread.assign(o);
         std::this_thread::sleep_for(milliseconds(30));
@@ -108,7 +106,7 @@ int main() {
         check(steady_clock::now() - before < milliseconds(500) && r.thread.delivered() == 0 && r.courier.node() == "A" &&
               r.courier.state() == CourierState::Idle && r.courier.bagCount() == 1, "la parada interrumpe el tramo");
     }
-    {   // sin pedidos duerme; la parada lo despierta y join vuelve
+    {
         Rig r(path, "c2", 1, cfg, g);
         std::this_thread::sleep_for(milliseconds(20));
         r.stop.request();
@@ -116,7 +114,7 @@ int main() {
         r.thread.join();
         check(steady_clock::now() - before < milliseconds(500), "join despierta al hilo dormido");
     }
-    {   // dos motos y un solo puesto: la segunda hace fila y recoge despues de que la primera termina
+    {
         std::remove(path.c_str());
         SimClock clock(1000.0);
         StopSignal stop;
@@ -143,7 +141,7 @@ int main() {
         check(t0.delivered() + t1.delivered() == 2 && secondStarted >= firstPickedUp && restaurants.at("r0").served() == 2,
               "con un puesto, la segunda recogida empieza cuando termina la primera");
     }
-    {   // averia: c0 (probabilidad 1) se averia en el tramo, libera el pedido, se repara; c1 lo recibe reasignado
+    {
         std::remove(path.c_str());
         SimClock clock(1000.0);
         StopSignal stop;
@@ -186,10 +184,10 @@ int main() {
         check(hasBreak && hasReassign && sm.breakdowns == 1 && sm.reassigned == 1 && sm.delivered == 1,
               "el log tiene courierBreakdown y orderReassigned y el resumen los cuenta");
     }
-    {   // traspaso: f0 recoge en B y se averia camino a D con el pedido recogido; f1, cerca, llega antes de la
-        // reparacion, va hasta ella y lo entrega
+    {
+
         std::remove(path.c_str());
-        Config city = cfg;  // A-B-C-D: el viaje B->D tiene dos tramos
+        Config city = cfg;
         city.nodes.push_back({"D", 0.0, 0.0359728});
         city.streets.push_back({"cd", "C", "D", false});
         const Graph g4(city);

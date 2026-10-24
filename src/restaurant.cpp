@@ -25,7 +25,7 @@ bool Restaurant::waitForSlot(const std::string& courierId, const StopSignal& sto
     ++busy_;
     ++served_;
     lock.unlock();
-    cv_.notify_all();  // el siguiente de la fila puede pasar si queda puesto
+    cv_.notify_all();
     return true;
 }
 

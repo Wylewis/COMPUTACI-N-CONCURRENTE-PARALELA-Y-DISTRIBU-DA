@@ -19,7 +19,6 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-// A ---1000 m--- B ---500 m--- C, doble sentido
 Config lineCity() {
     Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}, {"C", 0.0, 0.0134898}};
@@ -35,12 +34,12 @@ Order assigned(const std::string& id, const std::string& delivery) {
     return o;
 }
 
-}  // namespace
+}
 
 int main() {
     const Graph g(lineCity());
 
-    {   // reserva hasta la capacidad; el pedido rechazado se queda en quien lo ofrecio
+    {
         Courier c("c0", "A", 2);
         Order a = assigned("a", "C"), b = assigned("b", "B"), d = assigned("d", "C");
         check(c.reserve(a) && c.reserve(b) && a.id.empty() && b.id.empty() && c.bagItems()[0].state == OrderState::Assigned,
@@ -55,7 +54,7 @@ int main() {
         const auto bag = c.takeBag();
         check(rejected && bag.size() == 2 && c.bagCount() == 0, "averiado no acepta; takeBag vacia la mochila");
     }
-    {   // viaje: estado, nodo y copias para estimar y dibujar
+    {
         Courier c("c2", "A", 2);
         const CourierSnapshot idle = c.estimateSnapshot(1000);
         check(c.state() == CourierState::Idle && idle.node == "A" && idle.availableAtMs == 1000 && idle.bagCapacity == 2,
@@ -72,7 +71,7 @@ int main() {
         c.endTrip("C", CourierState::Idle);
         check(c.node() == "C" && c.state() == CourierState::Idle && !c.view().trip, "endTrip fija el nodo y suelta el viaje");
     }
-    {   // entrega mas cercana primero, solo entre pedidos recogidos
+    {
         Courier c("c3", "A", 3);
         Order far = assigned("far", "C"), near = assigned("near", "B"), pending = assigned("p", "B");
         c.reserve(far), c.reserve(near), c.reserve(pending);
@@ -81,7 +80,7 @@ int main() {
         const auto next = c.nearestDelivery(g);
         check(next && *next == "B" && c.view().deliveryNodes.size() == 3, "el destino mas cercano por calles va primero");
     }
-    {   // reservas concurrentes: nunca mas que la capacidad
+    {
         Courier c("c4", "A", 5);
         std::atomic<int> accepted{0};
         std::vector<std::thread> threads;

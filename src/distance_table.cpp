@@ -9,7 +9,7 @@ DistanceTable::Row DistanceTable::computeRow(const Graph& graph, const std::stri
     Row dist(n, kUnreachable);
     const std::size_t source = graph.nodeIndex(origin);
 
-    using Item = std::pair<double, std::size_t>;  // (distancia, nodo)
+    using Item = std::pair<double, std::size_t>;
     std::priority_queue<Item, std::vector<Item>, std::greater<Item>> queue;
     dist[source] = 0.0;
     queue.push({0.0, source});
@@ -17,7 +17,7 @@ DistanceTable::Row DistanceTable::computeRow(const Graph& graph, const std::stri
     while (!queue.empty()) {
         const auto [d, u] = queue.top();
         queue.pop();
-        if (d > dist[u]) continue;  // entrada obsoleta
+        if (d > dist[u]) continue;
         for (const Graph::Edge& e : graph.edgesAt(u)) {
             const double nd = d + e.lengthM;
             if (nd < dist[e.to]) {

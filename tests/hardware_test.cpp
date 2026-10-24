@@ -1,6 +1,3 @@
-// Pruebas de las decisiones que dependen del hardware: el tamano del pool
-// respeta minimo y maximo, sigue al hardware cuando esta en rango, y el
-// numero de tareas nunca supera el trabajo.
 #include <iostream>
 #include <string>
 #include <thread>
@@ -18,7 +15,7 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-}  // namespace
+}
 
 int main() {
     check(clampPoolSize(8, 2, 32) == 8, "dentro del rango, un hilo por hilo de hardware");

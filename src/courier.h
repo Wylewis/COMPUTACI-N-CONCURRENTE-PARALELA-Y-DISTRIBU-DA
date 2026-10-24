@@ -31,7 +31,6 @@ struct BagItem {
     std::int64_t readyAtMs = 0;
 };
 
-// Monitor de una moto: estado, nodo, viaje en curso y mochila con reserva.
 class Courier {
 public:
     Courier(std::string id, std::string startNode, int bagCapacity);
@@ -57,13 +56,12 @@ public:
     CourierSnapshot estimateSnapshot(std::int64_t nowMs) const;
     CourierView view() const;
     std::vector<BagItem> bagItems() const;
-    // Traspaso atomico: toma los pedidos recogidos de una moto averiada, los que
-    // quepan, con los dos cerrojos a la vez. Devuelve los ids traspasados.
+
     std::vector<std::string> takeOverFrom(Courier& broken);
     std::optional<std::string> nearestDelivery(const Graph& graph) const;
 
 private:
-    int indexOf(const std::string& orderId) const;  // -1 si no esta en la mochila
+    int indexOf(const std::string& orderId) const;
 
     const std::string id_;
     const int bagCapacity_;

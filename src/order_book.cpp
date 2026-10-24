@@ -26,7 +26,7 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
     std::vector<Order> candidates;
     for (Order& o : batch.orders) {
         if (o.state == OrderState::Rejected) {
-            outcome.rejected.push_back(std::move(o));  // unreachable: nunca ocupa lugar
+            outcome.rejected.push_back(std::move(o));
         } else {
             candidates.push_back(std::move(o));
         }
@@ -37,7 +37,6 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        // 1. Aceptar mientras haya lugar: comprobar e insertar en el mismo paso.
         std::vector<Order> accepted;
         for (Order& o : candidates) {
             if (closed_ || pending_ + accepted.size() >= maxPending_) {
@@ -48,10 +47,6 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
             }
         }
 
-        // 2. Posicion de cada pedido aceptado en la cola de su restaurante:
-        //    por restaurante, un vector de ceros y unos sobre la rafaga y su
-        //    scan exclusivo; la posicion es lo que ya habia en la cola mas
-        //    cuantos pedidos del mismo restaurante lo preceden en la rafaga.
         std::vector<std::size_t> position(accepted.size(), 0);
         for (const std::string& rid : restaurantOrder_) {
             std::vector<std::size_t> flags(accepted.size(), 0);
@@ -70,7 +65,6 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
             }
         }
 
-        // 3. Encolar.
         for (std::size_t i = 0; i < accepted.size(); ++i) {
             RestaurantQueue& q = queueOf(accepted[i].restaurantId);
             outcome.accepted.push_back(Placement{accepted[i].id, accepted[i].restaurantId, position[i]});
@@ -79,7 +73,7 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
             notify.push_back(&q);
         }
     }
-    // Despertar fuera del cerrojo: el despachador que despierte lo toma enseguida.
+
     for (RestaurantQueue* q : notify) q->available.notify_one();
     return outcome;
 }

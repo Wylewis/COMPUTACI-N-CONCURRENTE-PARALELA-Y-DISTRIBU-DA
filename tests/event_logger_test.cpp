@@ -1,7 +1,3 @@
-// Pruebas del log con hilo escritor: muchos productores a la vez, ninguna
-// linea mezclada, nada perdido, orden por productor conservado, cierre que
-// escribe lo pendiente, publicacion tras el cierre descartada, y resumen
-// solo despues de cerrar.
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -35,14 +31,13 @@ std::vector<std::string> readLines(const std::string& path) {
     return lines;
 }
 
-}  // namespace
+}
 
 int main() {
     const std::string path = "event_logger_test.tmp.log";
     std::remove(path.c_str());
     const int producers = 8, perProducer = 500;
 
-    // Muchos productores publican a la vez; el archivo queda entero y completo
     {
         Summary summary;
         {
@@ -73,7 +68,7 @@ int main() {
         const auto lines = readLines(path);
         check(static_cast<int>(lines.size()) == producers * perProducer, "el archivo tiene una linea por evento");
 
-        std::map<int, int> lastK;  // productor -> ultimo k visto
+        std::map<int, int> lastK;
         bool allJson = true, ordered = true, noDuplicates = true;
         std::map<std::string, int> seen;
         for (const auto& l : lines) {
@@ -104,7 +99,6 @@ int main() {
         check(summary.deliveredPerCourier.count("c0") == 1, "deliveredPerCourier lista al repartidor dado");
     }
 
-    // El destructor cierra: lo publicado justo antes se escribe igual
     {
         {
             EventLogger logger(path);
@@ -113,7 +107,6 @@ int main() {
         check(readLines(path).size() == 100, "el destructor escribe lo pendiente antes de terminar");
     }
 
-    // close() es idempotente y el resumen es consistente con un flujo completo
     {
         EventLogger logger(path, {"c0", "c1"});
         logger.publish(Event::orderCreated(1000, "o1", "r0"));
@@ -131,7 +124,6 @@ int main() {
               "reparto por repartidor con ceros");
     }
 
-    // Ruta imposible: el constructor lanza y no deja ningun hilo colgado
     {
         bool threw = false;
         try {

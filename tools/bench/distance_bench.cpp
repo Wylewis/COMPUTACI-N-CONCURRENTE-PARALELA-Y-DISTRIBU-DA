@@ -1,7 +1,3 @@
-// Experimento de la tabla de distancias: construccion en serie frente a la
-// paralela (std::async por grupo de origenes) para distintos numeros de
-// origenes, y barrido del numero de tareas para la ciudad completa. Imprime
-// tablas Markdown. Uso: distance_bench <config.json> [repeticiones]
 #include <chrono>
 #include <iostream>
 #include <string>

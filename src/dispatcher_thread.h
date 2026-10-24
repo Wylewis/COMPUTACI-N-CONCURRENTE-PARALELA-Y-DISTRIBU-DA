@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <thread>
+#include <vector>
 
 #include "config.h"
 #include "event_logger.h"
@@ -34,7 +35,8 @@ public:
 
 private:
     void run();
-    enum class Outcome { Assigned, Rejected, Stopped };
+    void rejectExpired();
+    enum class Outcome { Assigned, NoCourier, Stopped };
     Outcome dispatch(Order& order);
 
     const RestaurantConfig restaurant_;
@@ -42,7 +44,6 @@ private:
     Fleet& fleet_;
     const Graph& graph_;
     const double speedKmh_;
-    const std::int64_t acceptTimeoutMs_;
     const std::chrono::milliseconds quoteTimeout_;
     const std::string estimator_;
     ThreadPool& estimators_;

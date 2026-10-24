@@ -81,7 +81,8 @@ int main() {
     }
     check(parsed.size() == 13, "las 13 lineas parsean");
     if (parsed.size() == 13) {
-        check(hasExactly(parsed[0], {"t", "event", "order", "restaurant"}), "orderCreated lleva order y restaurant, nada mas");
+        check(hasExactly(parsed[0], {"t", "event", "order", "restaurant", "urgent"}) && parsed[0]["urgent"] == false,
+              "orderCreated lleva order, restaurant y urgent, nada mas");
         check(parsed[0]["event"] == "orderCreated" && parsed[0]["t"] == 1000, "orderCreated con t y nombre exactos");
         check(hasExactly(parsed[3], {"t", "event", "order", "reason"}) && parsed[3]["reason"] == "unreachable",
               "orderRejected lleva reason con el nombre exacto");
@@ -109,8 +110,11 @@ int main() {
     const std::string s = summary.toJsonLine();
     json sj = json::parse(s);
     check(hasExactly(sj, {"created", "delivered", "rejected", "pending", "reassigned", "breakdowns",
-                          "avgDeliveryMs", "maxDeliveryMs", "deliveredPerCourier"}),
-          "el resumen tiene exactamente las claves de la seccion 6.3");
+                          "avgDeliveryMs", "maxDeliveryMs", "deliveredPerCourier", "urgentCreated",
+                          "urgentDelivered", "avgUrgentDeliveryMs"}),
+          "el resumen tiene las claves de la seccion 6.3 mas las tres de urgentes");
+    check(summary.urgentCreated == 0 && summary.urgentDelivered == 0 && summary.avgUrgentDeliveryMs == 0,
+          "sin urgentes los tres contadores son 0");
     check(s.rfind("{\"created\":", 0) == 0, "created es la primera clave del resumen");
     check(sj["deliveredPerCourier"]["c0"] == 1, "deliveredPerCourier en el JSON del resumen");
     check(s.find('\n') == std::string::npos, "el resumen es una sola linea");
@@ -125,6 +129,22 @@ int main() {
         check(sm.avgDeliveryMs == 5500 && sm.maxDeliveryMs == 8000, "promedio y maximo con dos entregas");
         check(sm.deliveredPerCourier.size() == 1 && sm.deliveredPerCourier.at("c0") == 2,
               "sin lista previa, aparecen solo los repartidores que entregaron");
+    }
+
+    {
+        EventLog log(path);
+        log.write(Event::orderCreated(0, "u1", "r0", true));
+        log.write(Event::orderCreated(0, "n1", "r0", false));
+        log.write(Event::orderCreated(0, "u2", "r0", true));
+        log.write(Event::orderDelivered(4000, "u1", "c0"));
+        log.write(Event::orderDelivered(2000, "n1", "c0"));
+        const auto sm = log.summary();
+        check(sm.urgentCreated == 2 && sm.urgentDelivered == 1 && sm.avgUrgentDeliveryMs == 4000 &&
+                  sm.avgDeliveryMs == 3000 && sm.delivered == 2,
+              "los urgentes se cuentan aparte y el promedio general no cambia");
+        log.close();
+        const auto l = readLines(path);
+        check(json::parse(l[0])["urgent"] == true && json::parse(l[1])["urgent"] == false, "urgent se escribe tal cual");
     }
 
     {

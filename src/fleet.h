@@ -49,6 +49,7 @@ public:
     const LiveCounters& counters() const { return counters_; }
 
     std::uint64_t version() const;
+    void notifyChange();
     void waitForChange(std::uint64_t seen);
 
     bool waitForChange(std::uint64_t seen, std::chrono::steady_clock::time_point deadline);

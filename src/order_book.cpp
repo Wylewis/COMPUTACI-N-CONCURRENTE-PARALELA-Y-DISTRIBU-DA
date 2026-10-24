@@ -1,12 +1,29 @@
 #include "order_book.h"
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <utility>
 
 #include "scan.h"
 
-OrderBook::OrderBook(const Config& cfg) : maxPending_(static_cast<std::size_t>(std::max(0, cfg.orders.maxPending))) {
+namespace {
+
+std::int64_t idNumber(const std::string& id) {
+    std::size_t i = 0;
+    while (i < id.size() && !std::isdigit(static_cast<unsigned char>(id[i]))) ++i;
+    if (i == id.size()) return -1;
+    std::int64_t n = 0;
+    for (; i < id.size() && std::isdigit(static_cast<unsigned char>(id[i])); ++i) n = n * 10 + (id[i] - '0');
+    return n;
+}
+
+}
+
+OrderBook::OrderBook(const Config& cfg)
+    : maxPending_(static_cast<std::size_t>(std::max(0, cfg.orders.maxPending))),
+      agingMs_(std::max<std::int64_t>(0, cfg.orders.agingMs)),
+      acceptTimeoutMs_(std::max<std::int64_t>(0, cfg.dispatch.acceptTimeoutMs)) {
     for (const auto& r : cfg.restaurants) {
         queues_[r.id] = std::make_unique<RestaurantQueue>();
         restaurantOrder_.push_back(r.id);
@@ -19,6 +36,30 @@ OrderBook::RestaurantQueue& OrderBook::queueOf(const std::string& restaurantId) 
         throw std::out_of_range("restaurante desconocido en el libro de pedidos: " + restaurantId);
     }
     return *it->second;
+}
+
+const OrderBook::RestaurantQueue& OrderBook::queueOf(const std::string& restaurantId) const {
+    auto it = queues_.find(restaurantId);
+    if (it == queues_.end()) {
+        throw std::out_of_range("restaurante desconocido en el libro de pedidos: " + restaurantId);
+    }
+    return *it->second;
+}
+
+int OrderBook::priorityLevel(const Order& order, std::int64_t nowMs) const {
+    if (!order.urgent && agingMs_ > 0 && nowMs - order.createdAtMs >= agingMs_) return 2;
+    return order.urgent ? 1 : 0;
+}
+
+bool OrderBook::olderFirst(const Order& a, const Order& b) {
+    if (a.createdAtMs != b.createdAtMs) return a.createdAtMs < b.createdAtMs;
+    const std::int64_t na = idNumber(a.id), nb = idNumber(b.id);
+    if (na >= 0 && nb >= 0 && na != nb) return na < nb;
+    return a.id < b.id;
+}
+
+bool OrderBook::expired(const Order& order, std::int64_t nowMs) const {
+    return order.courierId.empty() && nowMs >= order.createdAtMs + acceptTimeoutMs_;
 }
 
 SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
@@ -75,18 +116,57 @@ SubmitOutcome OrderBook::submit(OrderBatch&& batch) {
     }
 
     for (RestaurantQueue* q : notify) q->available.notify_one();
+    if (!notify.empty() && onSubmitted_) onSubmitted_();
     return outcome;
 }
 
-std::optional<Order> OrderBook::take(const std::string& restaurantId) {
+std::optional<Order> OrderBook::take(const std::string& restaurantId, std::int64_t nowMs) {
     std::unique_lock<std::mutex> lock(mutex_);
     RestaurantQueue& q = queueOf(restaurantId);
     q.available.wait(lock, [&] { return closed_ || !q.orders.empty(); });
     if (q.orders.empty()) return std::nullopt;
-    Order o = std::move(q.orders.front());
-    q.orders.pop_front();
+    auto best = q.orders.begin();
+    int bestLevel = priorityLevel(*best, nowMs);
+    for (auto it = std::next(best); it != q.orders.end(); ++it) {
+        const int level = priorityLevel(*it, nowMs);
+        if (level > bestLevel || (level == bestLevel && olderFirst(*it, *best))) {
+            best = it;
+            bestLevel = level;
+        }
+    }
+    Order o = std::move(*best);
+    q.orders.erase(best);
     --pending_;
     return o;
+}
+
+std::vector<Order> OrderBook::takeExpired(const std::string& restaurantId, std::int64_t nowMs) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RestaurantQueue& q = queueOf(restaurantId);
+    std::vector<Order> out;
+    for (auto it = q.orders.begin(); it != q.orders.end();) {
+        if (expired(*it, nowMs)) {
+            out.push_back(std::move(*it));
+            it = q.orders.erase(it);
+            --pending_;
+        } else {
+            ++it;
+        }
+    }
+    return out;
+}
+
+std::optional<std::int64_t> OrderBook::nextWakeMs(const std::string& restaurantId, std::int64_t nowMs) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::optional<std::int64_t> wake;
+    auto consider = [&](std::int64_t t) {
+        if (!wake || t < *wake) wake = t;
+    };
+    for (const Order& o : queueOf(restaurantId).orders) {
+        if (o.courierId.empty()) consider(o.createdAtMs + acceptTimeoutMs_);
+        if (!o.urgent && agingMs_ > 0 && priorityLevel(o, nowMs) < 2) consider(o.createdAtMs + agingMs_);
+    }
+    return wake;
 }
 
 void OrderBook::putBack(Order order) {
@@ -135,9 +215,5 @@ std::size_t OrderBook::pending() const {
 
 std::size_t OrderBook::pendingAt(const std::string& restaurantId) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    auto it = queues_.find(restaurantId);
-    if (it == queues_.end()) {
-        throw std::out_of_range("restaurante desconocido en el libro de pedidos: " + restaurantId);
-    }
-    return it->second->orders.size();
+    return queueOf(restaurantId).orders.size();
 }

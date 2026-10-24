@@ -7,12 +7,13 @@
 
 using json = nlohmann::ordered_json;
 
-Event Event::orderCreated(std::int64_t t, const std::string& order, const std::string& restaurant) {
+Event Event::orderCreated(std::int64_t t, const std::string& order, const std::string& restaurant, bool urgent) {
     Event e;
     e.t = t;
     e.type = EventType::OrderCreated;
     e.order = order;
     e.restaurant = restaurant;
+    e.urgent = urgent;
     return e;
 }
 
@@ -98,6 +99,7 @@ std::string Event::toJsonLine() const {
     if (order) j["order"] = *order;
     if (courier) j["courier"] = *courier;
     if (restaurant) j["restaurant"] = *restaurant;
+    if (urgent) j["urgent"] = *urgent;
     if (from) j["from"] = *from;
     if (to) j["to"] = *to;
     if (reason) j["reason"] = toString(*reason);
@@ -117,6 +119,9 @@ std::string Summary::toJsonLine() const {
     json per = json::object();
     for (const auto& [courier, n] : deliveredPerCourier) per[courier] = n;
     j["deliveredPerCourier"] = per;
+    j["urgentCreated"] = urgentCreated;
+    j["urgentDelivered"] = urgentDelivered;
+    j["avgUrgentDeliveryMs"] = avgUrgentDeliveryMs;
     return j.dump();
 }
 
@@ -151,6 +156,10 @@ void EventLog::write(const Event& event) {
         case EventType::OrderCreated:
             ++summary_.created;
             if (e.order) createdAt_[*e.order] = e.t;
+            if (e.urgent && *e.urgent) {
+                ++summary_.urgentCreated;
+                if (e.order) urgent_.insert(*e.order);
+            }
             break;
         case EventType::OrderDelivered: {
             ++summary_.delivered;
@@ -162,6 +171,10 @@ void EventLog::write(const Event& event) {
             }
             deliveredTotalMs_ += elapsed;
             if (elapsed > summary_.maxDeliveryMs) summary_.maxDeliveryMs = elapsed;
+            if (e.order && urgent_.count(*e.order)) {
+                ++summary_.urgentDelivered;
+                urgentTotalMs_ += elapsed;
+            }
             break;
         }
         case EventType::OrderRejected:
@@ -195,6 +208,10 @@ Summary EventLog::summary() const {
     s.avgDeliveryMs = s.delivered > 0
         ? static_cast<std::int64_t>(std::llround(static_cast<double>(deliveredTotalMs_) /
                                                  static_cast<double>(s.delivered)))
+        : 0;
+    s.avgUrgentDeliveryMs = s.urgentDelivered > 0
+        ? static_cast<std::int64_t>(std::llround(static_cast<double>(urgentTotalMs_) /
+                                                 static_cast<double>(s.urgentDelivered)))
         : 0;
     return s;
 }

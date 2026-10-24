@@ -41,6 +41,8 @@ c["orders"]["meanIntervalMs"] = 15000
 for r in c["restaurants"]:
     r["prepTimeMs"] = [30000, 60000]
 c["incidents"]["breakdownProbability"] = 0.3
+c["orders"]["urgentProbability"] = 0.3
+c["orders"]["agingMs"] = 300000
 c["simulation"]["durationS"] = 2400
 c["simulation"]["timeScale"] = 2400
 json.dump(c, open(short.replace("short.json", "full.json"), "w"))
@@ -85,6 +87,9 @@ done
 delivered=$(grep -c '"orderDelivered"' "$work/full.log")
 if [ "$delivered" -lt 20 ]; then
     echo "FALLO  ciclo_completo: solo $delivered entregas en 40 minutos simulados"; failures=$((failures + 1))
+fi
+if ! grep -q '"urgent":true' "$work/full.log"; then
+    echo "FALLO  ciclo_completo: con urgentProbability 0.3 se esperaban pedidos urgentes en el log"; failures=$((failures + 1))
 fi
 if grep -q " 0 rescates" "$work/full.err"; then
     echo "AVISO  ciclo_completo: sin rescates en esta corrida (hace falta una averia con pedidos ya recogidos)"

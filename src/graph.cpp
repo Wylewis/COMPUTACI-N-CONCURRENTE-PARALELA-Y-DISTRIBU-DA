@@ -14,7 +14,7 @@ constexpr double kPi = 3.14159265358979323846;
 double radians(double degrees) {
     return degrees * kPi / 180.0;
 }
-}  // namespace
+}
 
 double distanceM(double lat1, double lon1, double lat2, double lon2) {
     const double p1 = radians(lat1);
@@ -77,7 +77,7 @@ std::optional<Route> Graph::shortestPath(const std::string& from, const std::str
     std::vector<std::size_t> prevNode(nodes_.size(), nodes_.size());
     std::vector<const Edge*> prevEdge(nodes_.size(), nullptr);
 
-    using Item = std::pair<double, std::size_t>;  // (distancia, nodo)
+    using Item = std::pair<double, std::size_t>;
     std::priority_queue<Item, std::vector<Item>, std::greater<Item>> queue;
     dist[source] = 0.0;
     queue.push({0.0, source});
@@ -85,7 +85,7 @@ std::optional<Route> Graph::shortestPath(const std::string& from, const std::str
     while (!queue.empty()) {
         const auto [d, u] = queue.top();
         queue.pop();
-        if (d > dist[u]) continue;   // entrada obsoleta
+        if (d > dist[u]) continue;
         if (u == target) break;
         for (const Edge& e : adjacency_[u]) {
             const double nd = d + e.lengthM;

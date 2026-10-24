@@ -10,7 +10,7 @@ cv::Point at(const MapProjection& proj, const Graph::Node& n) {
     const Pixel p = proj.toPixel(n.lat, n.lon);
     return {static_cast<int>(p.x), static_cast<int>(p.y)};
 }
-}  // namespace
+}
 
 MapWindow::MapWindow(const Config& cfg, const Graph& graph)
     : projection_(cfg.map.bounds, 1, 1) {
@@ -25,7 +25,7 @@ void MapWindow::drawStatic(const Config& cfg, const Graph& graph) {
         const cv::Point a = at(projection_, graph.nodeAt(graph.nodeIndex(s.from)));
         const cv::Point b = at(projection_, graph.nodeAt(graph.nodeIndex(s.to)));
         cv::line(base_, a, b, s.oneWay ? oneWayColor() : twoWayColor(), 2, cv::LINE_AA);
-        if (s.oneWay) cv::circle(base_, b, 3, oneWayColor(), cv::FILLED, cv::LINE_AA);  // punta: sentido de la calle
+        if (s.oneWay) cv::circle(base_, b, 3, oneWayColor(), cv::FILLED, cv::LINE_AA);
     }
     for (const RestaurantConfig& r : cfg.restaurants) {
         const cv::Point p = at(projection_, graph.nodeAt(graph.nodeIndex(r.node)));

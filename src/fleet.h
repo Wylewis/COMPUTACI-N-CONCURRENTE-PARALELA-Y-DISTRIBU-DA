@@ -21,9 +21,6 @@
 #include "sim_clock.h"
 #include "stop_signal.h"
 
-// Las motos y sus hilos. Da copias de toda la flota (snapshots, views), asigna
-// por id, y lleva una version que cada entrega incrementa: un despachador que
-// no encontro moto duerme en waitForChange hasta que la flota cambie.
 class Fleet {
 public:
     Fleet(const FleetConfig& cfg, const Graph& graph, Restaurants& restaurants, EventLogger& logger,
@@ -31,30 +28,29 @@ public:
     Fleet(const Fleet&) = delete;
     Fleet& operator=(const Fleet&) = delete;
 
-    static std::vector<std::string> courierIds(int couriers);  // c0..c(n-1)
+    static std::vector<std::string> courierIds(int couriers);
 
     void start();
-    void join();  // despues de stop.request(): saca a las motos de las filas y las une
-    void wake();  // despierta a los despachadores dormidos en waitForChange
+    void join();
+    void wake();
 
     std::size_t size() const { return couriers_.size(); }
     const Courier& courier(std::size_t i) const { return *couriers_[i]; }
     std::vector<CourierSnapshot> snapshots(std::int64_t nowMs) const;
     std::vector<CourierView> views() const;
     bool assign(const std::string& courierId, Order& order);
-    // Antes de start(): averias con la probabilidad de la configuracion, y a quien devolver los pedidos liberados.
+
     void enableBreakdowns(const IncidentsConfig& incidents, std::uint64_t seed, std::function<void(Order)> release);
     std::int64_t breakdowns() const;
-    // Pide una moto de rescate para la averiada: la mas cercana en linea recta con lugar; si no hay, queda
-    // pendiente y se reintenta en cada cambio de la flota.
+
     void rescue(const std::string& brokenId);
     std::int64_t rescues() const;
     std::int64_t delivered() const;
-    const LiveCounters& counters() const { return counters_; }  // en vivo, un contador por moto
+    const LiveCounters& counters() const { return counters_; }
 
     std::uint64_t version() const;
-    void waitForChange(std::uint64_t seen);  // hasta version != seen o parada
-    // Igual, con plazo: true si la flota cambio, false si vencio el plazo o se pidio parar.
+    void waitForChange(std::uint64_t seen);
+
     bool waitForChange(std::uint64_t seen, std::chrono::steady_clock::time_point deadline);
 
 private:
@@ -70,5 +66,5 @@ private:
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     std::uint64_t version_ = 0;
-    std::deque<std::string> pendingRescues_;  // bajo mutex_
+    std::deque<std::string> pendingRescues_;
 };

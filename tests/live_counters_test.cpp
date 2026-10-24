@@ -1,5 +1,3 @@
-// Contadores por moto: exactos bajo hilos concurrentes, y medicion del costo
-// de compartir linea de cache frente a tener cada contador en la suya.
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -20,7 +18,7 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-struct Packed {  // contadores pegados: varios por linea de cache
+struct Packed {
     std::atomic<std::int64_t> v{0};
 };
 
@@ -39,7 +37,7 @@ double millisFor(Slot* slots, int threads, int increments) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
-}  // namespace
+}
 
 int main() {
     constexpr int kThreads = 8, kIncrements = 2'000'000;

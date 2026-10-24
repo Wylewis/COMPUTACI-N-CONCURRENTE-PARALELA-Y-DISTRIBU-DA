@@ -23,11 +23,11 @@ void CourierThread::join() {
 
 bool CourierThread::assign(Order& order) {
     const std::string id = order.id;
-    const std::string from = order.courierId;  // no vacio: viene de una moto averiada
+    const std::string from = order.courierId;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!courier_.reserve(order)) return false;
-        if (from.empty() || from == courier_.id())  // nuevo, o la misma moto lo retoma tras repararse
+        if (from.empty() || from == courier_.id())
             logger_.publish(Event::orderAssigned(clock_.nowMs(), id, courier_.id()));
         else
             logger_.publish(Event::orderReassigned(clock_.nowMs(), id, from, courier_.id()));
@@ -52,7 +52,7 @@ void CourierThread::rescue(Courier& broken) {
 }
 
 void CourierThread::run() {
-    int parked = 0;  // pedidos que quedaron en la mochila al dormirse: solo un cambio lo despierta
+    int parked = 0;
     for (;;) {
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait(lock, [&] { return stop_.requested() || !rescues_queue_.empty() || courier_.bagCount() != parked; });
@@ -70,10 +70,10 @@ void CourierThread::run() {
 }
 
 bool CourierThread::serveRescue(Courier& broken) {
-    const Travel t = travelTo(broken.node(), CourierState::ToRestaurant);  // la averiada es un punto de recogida
+    const Travel t = travelTo(broken.node(), CourierState::ToRestaurant);
     if (t == Travel::Stopped) return false;
     if (t != Travel::Arrived) {
-        if (onRescueNeeded_) onRescueNeeded_(broken.id());  // que lo intente otra moto
+        if (onRescueNeeded_) onRescueNeeded_(broken.id());
         return true;
     }
     for (const std::string& id : courier_.takeOverFrom(broken))
@@ -136,17 +136,17 @@ bool CourierThread::breakDownAt(const std::string& node) {
     breakdowns_.fetch_add(1, std::memory_order_acq_rel);
     if (counters_) counters_->breakdowns.fetch_add(1, std::memory_order_relaxed);
     logger_.publish(Event::courierBreakdown(clock_.nowMs(), courier_.id()));
-    for (const BagItem& b : courier_.bagItems()) {  // las reservas no recogidas se liberan
+    for (const BagItem& b : courier_.bagItems()) {
         if (b.state != OrderState::Assigned) continue;
         std::optional<Order> o = courier_.removeOrder(b.id);
         if (!o) continue;
         o->release();
         if (onReleased_) onReleased_(std::move(*o));
     }
-    if (courier_.bagCount() > 0 && onRescueNeeded_) onRescueNeeded_(courier_.id());  // quedan recogidos
+    if (courier_.bagCount() > 0 && onRescueNeeded_) onRescueNeeded_(courier_.id());
     if (!waitSim(clock_.nowMs() + kRepairMs)) return false;
     courier_.setState(CourierState::Idle);
-    if (onFreed_) onFreed_();  // vuelve al servicio: la flota cambio
+    if (onFreed_) onFreed_();
     return true;
 }
 
@@ -158,13 +158,13 @@ bool CourierThread::pickUpAt(const std::string& restaurantId, const std::vector<
             mine.push_back(b);
             readyMs = std::max(readyMs, b.readyAtMs);
         }
-    if (!waitSim(readyMs)) return false;  // la preparacion se espera fuera de la fila
+    if (!waitSim(readyMs)) return false;
 
     Restaurant& r = restaurants_.at(restaurantId);
     r.enterQueue(courier_.id());
     courier_.setState(CourierState::Queued);
     if (!r.waitForSlot(courier_.id(), stop_)) return false;
-    struct SlotGuard {  // el puesto se devuelve en toda salida, tambien por parada
+    struct SlotGuard {
         Restaurant& r;
         ~SlotGuard() { r.leaveSlot(); }
     } guard{r};

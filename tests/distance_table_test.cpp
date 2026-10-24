@@ -1,6 +1,3 @@
-// Pruebas de la tabla de distancias: filas correctas en una ciudad chica,
-// coincidencia con shortestPath, origenes y destinos invalidos, y con la
-// ciudad real una fila por restaurante comparada con Dijkstra punto a punto.
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -28,7 +25,6 @@ bool near(double a, double b, double tol) {
     return std::fabs(a - b) <= tol;
 }
 
-// A <-> B -> C -> D -> B (circuito de un sentido), A -> E (callejon), F -> A (nadie llega a F)
 Config smallCity() {
     Config cfg;
     cfg.nodes = {{"A", 0.0000, 0.0000}, {"B", 0.0000, 0.0009}, {"C", 0.0009, 0.0009},
@@ -38,7 +34,7 @@ Config smallCity() {
     return cfg;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     const Config cfg = smallCity();
@@ -48,7 +44,6 @@ int main(int argc, char** argv) {
     check(table.originCount() == 2 && table.nodeCount() == 6, "dos origenes, seis nodos");
     check(table.hasOrigin("A") && !table.hasOrigin("B"), "hasOrigin");
 
-    // Desde A: todo alcanzable salvo F
     {
         const double ab = distanceM(0, 0, 0, 0.0009);
         const double bc = distanceM(0, 0.0009, 0.0009, 0.0009);
@@ -60,13 +55,13 @@ int main(int argc, char** argv) {
         check(!table.distanceM("A", "F").has_value(), "A no llega a F");
         check(table.reachableCount("A") == 5, "desde A se alcanzan 5 de 6");
     }
-    // Desde E: solo E
+
     {
         check(near(*table.distanceM("E", "E"), 0.0, 1e-9), "E a E es 0");
         check(!table.distanceM("E", "A").has_value(), "de E no se sale");
         check(table.reachableCount("E") == 1, "desde E solo E");
     }
-    // Coincide con shortestPath en todos los pares desde A
+
     {
         bool same = true;
         for (const auto& n : cfg.nodes) {
@@ -77,7 +72,7 @@ int main(int argc, char** argv) {
         }
         check(same, "la fila de A coincide con shortestPath nodo a nodo");
     }
-    // Origen sin fila y destino inexistente
+
     {
         check(!table.distanceM("B", "A").has_value(), "un origen sin fila devuelve nullopt");
         bool threw = false;
@@ -87,7 +82,7 @@ int main(int argc, char** argv) {
         try { table.row("B"); } catch (const std::out_of_range&) { threw = true; }
         check(threw, "row() de un origen sin fila lanza");
     }
-    // Constructor a partir de filas ya calculadas (el que usara la version paralela)
+
     {
         std::vector<DistanceTable::Row> rows{DistanceTable::computeRow(g, "A"), DistanceTable::computeRow(g, "E")};
         const DistanceTable fromRows(g, {"A", "E"}, rows);
@@ -97,7 +92,6 @@ int main(int argc, char** argv) {
         check(threw, "filas y origenes de distinto tamano se rechazan");
     }
 
-    // Ciudad real
     if (argc > 1) {
         try {
             Config city = loadConfig(argv[1]);

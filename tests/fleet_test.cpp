@@ -17,10 +17,10 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-}  // namespace
+}
 
 int main() {
-    Config cfg;  // A ---1000 m--- B, doble sentido; r0 en B
+    Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}};
     cfg.streets = {{"ab", "A", "B", false}};
     cfg.restaurants = {{"r0", "Uno", "B", 1, 0, 0}};
@@ -52,7 +52,7 @@ int main() {
     check(!fleet.assign("c9", other) && other.id == "o2" && fleet.assign("c1", o) && fleet.snapshots(0)[1].bagCount == 1,
           "assign por id: desconocido falla con el pedido intacto; c1 lo reserva");
     const auto before = std::chrono::steady_clock::now();
-    fleet.waitForChange(v0);  // la entrega de c1 cambia la version
+    fleet.waitForChange(v0);
     check(fleet.version() == v0 + 1 && fleet.delivered() == 1 &&
               std::chrono::steady_clock::now() - before < std::chrono::seconds(3),
           "la entrega incrementa la version y despierta a quien esperaba");

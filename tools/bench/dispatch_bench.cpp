@@ -1,8 +1,3 @@
-// Experimento de despacho: el map de estimaciones de un anillo en serie, con
-// una tarea std::async por candidato y sobre el pool, para distintos tamanos
-// de anillo. Imprime una tabla Markdown con tiempos por map, speedup frente
-// a la serie y el costo fijo por tarea que explica el resultado (Amdahl con
-// sobrecarga). Uso: dispatch_bench <config.json> [repeticiones]
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -15,7 +10,7 @@ using clk = std::chrono::steady_clock;
 
 template <class F>
 double microsPer(int reps, F&& f) {
-    f();  // calentar
+    f();
     const auto t0 = clk::now();
     for (int i = 0; i < reps; ++i) f();
     return std::chrono::duration<double, std::micro>(clk::now() - t0).count() / reps;
@@ -45,15 +40,14 @@ int main(int argc, char** argv) {
         const double async = microsPer(reps, [&] { estimateAllAsync(ring, one, timeout); });
         const double pooled = microsPer(reps, [&] { estimateAllPooled(ring, one, pool, timeout); });
         const double perEstimate = serial / n;
-        // Modelo: T_par = T_serie / hilos + n * sobrecarga  =>  sobrecarga = (T_par - T_serie / hilos) / n
+
         const double threads = static_cast<double>(pool.size());
         const double ovAsync = (async - serial / std::min<double>(n, threads)) / n;
         const double ovPool = (pooled - serial / std::min<double>(n, threads)) / n;
         std::cout << "| " << n << " | " << serial << " | " << async << " | " << pooled << " | " << serial / async << " | "
                   << serial / pooled << " | " << perEstimate << " | " << ovAsync << " | " << ovPool << " |\n";
     }
-    // Mismo map con estimaciones artificialmente caras (cada una se calcula k
-    // veces): muestra donde el paralelismo empieza a pagar la sobrecarga.
+
     std::cout << "\nEstimaciones caras (cada una repetida k veces), anillo de 8 candidatos:\n\n";
     std::cout << "| k | por estimacion (us) | serie (us) | async (us) | pool (us) | speedup async | speedup pool |\n|---|---|---|---|---|---|---|\n";
     std::vector<CourierSnapshot> ring8;
@@ -68,7 +62,7 @@ int main(int argc, char** argv) {
             for (const CourierSnapshot& c : ring8) {
                 try {
                     heavy(c);
-                } catch (const EstimateError&) {  // igual que estimateAll: la que falla se descarta
+                } catch (const EstimateError&) {
                 }
             }
         });

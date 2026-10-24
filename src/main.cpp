@@ -59,7 +59,7 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
     return true;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     Options opts;
@@ -120,10 +120,6 @@ int main(int argc, char** argv) {
         generatorThread.start();
         std::cout << kStartLine << std::endl;
 
-        // Esperar el fin: por tiempo simulado cumplido, por senal, o porque se
-        // cerro la ventana, lo que ocurra primero. Con ventana, el hilo principal
-        // dibuja un cuadro y espera unos milisegundos entre cuadros: esa es la
-        // unica pausa periodica del programa, y solo regula la tasa de cuadros.
         const std::int64_t durationMs = config.simulation.durationS * 1000;
         bool windowClosed = false;
 #ifdef HAVE_OPENCV
@@ -155,10 +151,6 @@ int main(int argc, char** argv) {
         const bool bySignal = watcher.signalsReceived() > 0;
         stop.request();
 
-        // Apagado ordenado: nadie crea mas pedidos, se registra la parada, el
-        // libro se cierra (los despachadores devuelven lo que tenian en la mano
-        // y terminan), las motos salen de filas y viajes, y lo que quedaba en
-        // el libro o en las mochilas es pending.
         generatorThread.join();
         logger.publish(Event::simulationStopping(clock.nowMs()));
         book.close();

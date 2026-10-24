@@ -1,6 +1,3 @@
-// Pruebas de la orden de parar y del vigia de senales: esperas que terminan
-// por tiempo o por la orden, muchos hilos despertados por una sola llamada,
-// SIGINT y SIGTERM convertidas en la orden, y vigia que termina sin senal.
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -31,10 +28,10 @@ long long millisOf(F&& f) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 }
 
-}  // namespace
+}
 
 int main() {
-    // Estado inicial y request idempotente
+
     {
         StopSignal stop;
         check(!stop.requested(), "al inicio no se pidio parar");
@@ -44,7 +41,7 @@ int main() {
         check(millisOf([&] { stop.wait(); }) < 50, "wait vuelve de inmediato si ya se pidio parar");
         check(stop.waitFor(500ms), "waitFor devuelve true de inmediato si ya se pidio parar");
     }
-    // Espera que vence por tiempo
+
     {
         StopSignal stop;
         bool stopped = true;
@@ -52,7 +49,7 @@ int main() {
         check(!stopped, "sin orden de parar, waitFor devuelve false");
         check(ms >= 140 && ms < 1000, "y espera aproximadamente el tiempo pedido");
     }
-    // Espera interrumpida por la orden desde otro hilo
+
     {
         StopSignal stop;
         std::thread t([&] {
@@ -65,7 +62,7 @@ int main() {
         check(stopped, "la orden interrumpe la espera");
         check(ms < 1000, "y lo hace enseguida, no al vencer el plazo");
     }
-    // Una sola request despierta a todos los que esperan
+
     {
         StopSignal stop;
         std::atomic<int> woke{0};
@@ -82,7 +79,7 @@ int main() {
         for (auto& t : sleepers) t.join();
         check(woke.load() == 10, "los 10 hilos despertaron con una sola orden");
     }
-    // El vigia convierte SIGINT en la orden de parar
+
     {
         StopSignal stop;
         {
@@ -93,7 +90,7 @@ int main() {
         }
         check(stop.requested(), "la orden sigue en pie tras destruir el vigia");
     }
-    // Lo mismo con SIGTERM, y el vigia no sobrevive al ambito aunque no llegue nada despues
+
     {
         StopSignal stop;
         {
@@ -102,7 +99,7 @@ int main() {
             check(stop.waitFor(2s), "SIGTERM produce la orden de parar");
         }
     }
-    // Un vigia que nunca recibe una senal termina igual al destruirse
+
     {
         StopSignal stop;
         const long long ms = millisOf([&] {
@@ -112,8 +109,7 @@ int main() {
         check(!stop.requested(), "sin senal no hay orden de parar");
         check(ms < 1000, "el vigia se destruye sin esperar a una senal");
     }
-    // Despues de destruir el vigia, las senales vuelven a su comportamiento por defecto:
-    // no se prueba con raise porque mataria el proceso. Se comprueba que se puede crear otro.
+
     {
         StopSignal stop;
         bool created = false;

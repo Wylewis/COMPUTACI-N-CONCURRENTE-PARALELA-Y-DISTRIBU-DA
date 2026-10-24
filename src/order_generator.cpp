@@ -15,8 +15,6 @@ OrderGenerator::OrderGenerator(const Config& cfg, const Graph& graph)
     nextAtMs_ = drawIntervalMs();
 }
 
-// Intervalos exponenciales: las llegadas son un proceso de Poisson con la
-// media configurada, que es el modelo clasico de pedidos independientes.
 std::int64_t OrderGenerator::drawIntervalMs() {
     const double mean = static_cast<double>(cfg_.orders.meanIntervalMs);
     if (mean <= 0.0) return 0;
@@ -37,9 +35,6 @@ OrderBatch OrderGenerator::next() {
     OrderBatch batch;
     batch.atMs = nextAtMs_;
 
-    // Orden fijo de extracciones: tamano de la rafaga, y por cada pedido
-    // restaurante, nodo de entrega y tiempo de preparacion. Cambiar este orden
-    // cambia la secuencia que produce una semilla.
     const int size = drawBurstSize();
     std::uniform_int_distribution<std::size_t> pickRestaurant(0, cfg_.restaurants.size() - 1);
     std::uniform_int_distribution<std::size_t> pickNode(0, cfg_.nodes.size() - 2);
@@ -47,8 +42,6 @@ OrderBatch OrderGenerator::next() {
     for (int i = 0; i < size; ++i) {
         const RestaurantConfig& r = cfg_.restaurants[pickRestaurant(rng_)];
 
-        // Nodo de entrega distinto del nodo del restaurante: se sortea entre
-        // todos menos uno y se salta el del restaurante.
         std::size_t idx = pickNode(rng_);
         const std::string& restaurantNode = r.node;
         if (cfg_.nodes[idx].id == restaurantNode) idx = cfg_.nodes.size() - 1;

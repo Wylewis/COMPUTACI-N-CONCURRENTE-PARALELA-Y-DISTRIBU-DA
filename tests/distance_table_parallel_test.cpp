@@ -1,7 +1,3 @@
-// Pruebas de la construccion en paralelo de la tabla de distancias: igualdad
-// celda por celda con la version serial, con 1 tarea, con mas tareas que
-// origenes y con el valor por defecto; excepciones que cruzan desde una tarea;
-// y, con la ciudad real, tiempos serial y paralelo para 9 y para 320 origenes.
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -57,10 +53,10 @@ long long microsOf(F&& f) {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count();
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
-    // defaultTaskCount
+
     {
         const unsigned cores = std::thread::hardware_concurrency();
         const unsigned expect = cores == 0 ? 2 : cores;
@@ -83,7 +79,7 @@ int main(int argc, char** argv) {
         const DistanceTable empty = buildDistanceTableParallel(g, none);
         check(empty.originCount() == 0, "sin origenes, tabla vacia");
     }
-    // Una excepcion dentro de una tarea llega al que construye
+
     {
         bool threw = false;
         try {
@@ -94,7 +90,6 @@ int main(int argc, char** argv) {
         check(threw, "un origen desconocido en una tarea se propaga como excepcion");
     }
 
-    // Ciudad real: igualdad y tiempos
     if (argc > 1) {
         try {
             Config city = loadConfig(argv[1]);
@@ -111,7 +106,6 @@ int main(int argc, char** argv) {
             const DistanceTable sn(cg, nodes);
             check(sameTables(sn, buildDistanceTableParallel(cg, nodes), nodes), "ciudad real, 320 origenes: paralelo = serial");
 
-            // Tiempos: la mejor de 5 repeticiones de cada version
             auto best = [](auto&& f) {
                 long long b = -1;
                 for (int i = 0; i < 5; ++i) {

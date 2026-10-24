@@ -5,12 +5,7 @@
 
 #include "nlohmann/json.hpp"
 
-// ordered_json conserva el orden de insercion de las claves: t y event primero.
 using json = nlohmann::ordered_json;
-
-// ---------------------------------------------------------------------------
-// Event
-// ---------------------------------------------------------------------------
 
 Event Event::orderCreated(std::int64_t t, const std::string& order, const std::string& restaurant) {
     Event e;
@@ -106,12 +101,8 @@ std::string Event::toJsonLine() const {
     if (from) j["from"] = *from;
     if (to) j["to"] = *to;
     if (reason) j["reason"] = toString(*reason);
-    return j.dump();  // una sola linea, sin saltos
+    return j.dump();
 }
-
-// ---------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------
 
 std::string Summary::toJsonLine() const {
     json j;
@@ -128,10 +119,6 @@ std::string Summary::toJsonLine() const {
     j["deliveredPerCourier"] = per;
     return j.dump();
 }
-
-// ---------------------------------------------------------------------------
-// EventLog
-// ---------------------------------------------------------------------------
 
 EventLog::EventLog(const std::string& path, const std::vector<std::string>& courierIds)
     : out_(path, std::ios::out | std::ios::trunc) {
@@ -154,7 +141,7 @@ void EventLog::write(const Event& event) {
     if (e.order) {
         auto it = lastT_.find(*e.order);
         if (it != lastT_.end() && e.t < it->second) {
-            e.t = it->second;  // el tiempo de un pedido nunca retrocede
+            e.t = it->second;
             ++clockFixes_;
         }
         lastT_[*e.order] = e.t;

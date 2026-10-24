@@ -7,15 +7,12 @@
 DistanceTable buildDistanceTableParallel(const Graph& graph, const std::vector<std::string>& origins,
                                          unsigned tasks) {
     const std::size_t n = origins.size();
-    std::vector<DistanceTable::Row> rows(n);  // una fila por origen, ya dimensionado
+    std::vector<DistanceTable::Row> rows(n);
     if (n == 0) return DistanceTable(graph, origins, std::move(rows));
 
     if (tasks == 0) tasks = defaultTaskCount(n);
     tasks = static_cast<unsigned>(std::min<std::size_t>(tasks, n));
 
-    // Fan-out: la tarea k calcula las filas [begin, end), un rango disjunto.
-    // Escribir en elementos distintos de un vector desde hilos distintos no es
-    // una carrera de datos: son objetos distintos.
     std::vector<std::future<void>> pending;
     pending.reserve(tasks);
     const std::size_t chunk = (n + tasks - 1) / tasks;
@@ -30,7 +27,6 @@ DistanceTable buildDistanceTableParallel(const Graph& graph, const std::vector<s
         }));
     }
 
-    // Fan-in: esperar a todas. get() relanza aqui cualquier excepcion de la tarea.
     for (auto& f : pending) f.get();
 
     return DistanceTable(graph, origins, std::move(rows));

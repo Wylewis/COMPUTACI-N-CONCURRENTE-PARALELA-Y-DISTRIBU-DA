@@ -34,21 +34,20 @@ void DispatcherThread::run() {
 }
 
 DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
-    // Un pedido liberado por averia ya fue aceptado: no se rechaza, espera moto sin plazo (regla 11.4).
+
     const bool wasAssigned = !order.courierId.empty();
     const std::int64_t deadlineMs = order.createdAtMs + acceptTimeoutMs_;
     while (!stop_.requested()) {
         const std::uint64_t seen = fleet_.version();
         const std::int64_t now = clock_.nowMs();
-        // Las tareas reciben una copia del pedido: una tardia puede seguir en el
-        // pool cuando el original ya se movio a la moto.
+
         auto copy = std::make_shared<Order>();
         copy->id = order.id, copy->restaurantId = order.restaurantId, copy->deliveryNode = order.deliveryNode;
         copy->createdAtMs = order.createdAtMs, copy->readyAtMs = order.readyAtMs;
         const OneEstimate one = [copy, this, now](const CourierSnapshot& c) {
             return estimateDelivery(c, *copy, restaurant_, graph_, speedKmh_, now);
         };
-        Mapper mapper;  // vacio: estimateAll en serie (experimento de despacho: serial | async | pool)
+        Mapper mapper;
         if (estimator_ == "pool")
             mapper = [&](const std::vector<CourierSnapshot>& ring) {
                 AsyncEstimates r = estimateAllPooled(ring, one, estimators_, quoteTimeout_);

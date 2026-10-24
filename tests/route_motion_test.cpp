@@ -1,6 +1,3 @@
-// Pruebas del movimiento sobre una ruta: tiempos de viaje, posicion en cada
-// instante, continuidad del avance y permanencia sobre la calle. Con la ruta
-// del config real como argumento, prueba ademas una ruta de la ciudad.
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -25,7 +22,6 @@ bool near(double a, double b, double tol) {
     return std::fabs(a - b) <= tol;
 }
 
-// Tres nodos en linea sobre el ecuador: A en 0, B a 1000 m, C a 1500 m (hacia el este).
 Config lineCity() {
     Config cfg;
     cfg.nodes = {{"A", 0.0, 0.0}, {"B", 0.0, 0.0089932}, {"C", 0.0, 0.0134898}};
@@ -33,7 +29,6 @@ Config lineCity() {
     return cfg;
 }
 
-// Distancia perpendicular aproximada de p a la recta a-b, en grados.
 double offLine(const GeoPoint& p, const GeoPoint& a, const GeoPoint& b) {
     const double dx = b.lon - a.lon, dy = b.lat - a.lat;
     const double len = std::hypot(dx, dy);
@@ -41,10 +36,10 @@ double offLine(const GeoPoint& p, const GeoPoint& a, const GeoPoint& b) {
     return std::fabs(dy * p.lon - dx * p.lat + b.lon * a.lat - b.lat * a.lon) / len;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
-    // Tiempo de viaje: 36 km/h son 10 m/s
+
     check(travelTimeMs(1000.0, 36.0) == 100'000, "1000 m a 36 km/h son 100 s");
     check(travelTimeMs(0.0, 30.0) == 0, "0 m tardan 0");
     check(travelTimeMs(-5.0, 30.0) == 0, "metros negativos cuentan como 0");
@@ -54,7 +49,6 @@ int main(int argc, char** argv) {
         check(threw, "velocidad 0 se rechaza");
     }
 
-    // Interpolacion
     {
         const GeoPoint m = interpolate({0, 0}, {2, 4}, 0.25);
         check(near(m.lat, 0.5, 1e-12) && near(m.lon, 1.0, 1e-12), "interpolate a un cuarto");
@@ -75,26 +69,25 @@ int main(int argc, char** argv) {
     check(motion.arrivalMs() == motion.startMs() + motion.durationMs(), "llegada = salida + duracion");
     check(motion.legs()[0].streetId == "ab" && motion.legs()[1].streetId == "bc", "los tramos llevan su calle");
 
-    // Antes de salir: en el origen
     {
         const GeoPoint p = motion.positionAt(0);
         check(near(p.lat, 0, 1e-9) && near(p.lon, 0, 1e-9), "antes de salir esta en A");
         check(motion.metersAt(4'999) == 0.0, "antes de salir no avanzo");
         check(!motion.arrived(4'999), "antes de salir no llego");
     }
-    // A mitad del primer tramo: 500 m, 50 s despues de salir
+
     {
         const GeoPoint p = motion.positionAt(5'000 + 50'000);
         check(near(p.lat, 0, 1e-9) && near(p.lon, 0.0089932 / 2, 1e-6), "a los 50 s esta a mitad de A-B");
         check(motion.legIndexAt(5'000 + 50'000) == 0, "sigue en el primer tramo");
     }
-    // Justo pasado B: tramo 1
+
     {
         check(motion.legIndexAt(5'000 + 100'500) == 1, "despues de 100.5 s esta en el segundo tramo");
         const GeoPoint p = motion.positionAt(5'000 + 125'000);
         check(near(p.lon, 0.0089932 + 0.0044966 / 2, 1e-6), "a los 125 s esta a mitad de B-C");
     }
-    // Llegada y mas alla: en C
+
     {
         const GeoPoint p = motion.positionAt(5'000 + 150'000);
         check(near(p.lon, 0.0134898, 1e-6), "al llegar esta en C");
@@ -103,7 +96,7 @@ int main(int argc, char** argv) {
         check(motion.arrived(5'000 + 150'000) && !motion.arrived(5'000 + 149'999), "arrived cambia justo en la llegada");
         check(motion.legIndexAt(5'000 + 999'000) == 1, "una vez llegado, el tramo es el ultimo");
     }
-    // Avance continuo y monotono, siempre sobre la calle
+
     {
         double lastLon = -1.0;
         bool monotone = true, onStreet = true;
@@ -115,17 +108,17 @@ int main(int argc, char** argv) {
         }
         check(monotone, "la posicion nunca retrocede");
         check(onStreet, "la posicion nunca se sale de la linea A-B-C");
-        // Dos instantes separados 1 s difieren en 10 m
+
         const GeoPoint p1 = motion.positionAt(20'000), p2 = motion.positionAt(21'000);
         check(near(distanceM(p1.lat, p1.lon, p2.lat, p2.lon), 10.0, 0.05), "cada segundo avanza 10 m");
     }
-    // Duraciones por tramo suman la duracion total
+
     {
         const auto d = motion.legDurationsMs();
         check(d.size() == 2 && near(static_cast<double>(d[0]), 100'000, 100) && near(static_cast<double>(d[1]), 50'000, 100),
               "duraciones por tramo: 100 s y 50 s");
     }
-    // Ruta de un solo nodo: no hay viaje
+
     {
         const auto still = g.shortestPath("B", "B");
         const RouteMotion m(*still, g, 36.0, 0);
@@ -134,14 +127,13 @@ int main(int argc, char** argv) {
         check(near(p.lon, 0.0089932, 1e-9), "ruta trivial: siempre en el nodo");
         check(m.arrived(0), "ruta trivial: ya llego");
     }
-    // Errores
+
     {
         bool threw = false;
         try { RouteMotion bad(Route{}, g, 36.0, 0); } catch (const std::invalid_argument&) { threw = true; }
         check(threw, "ruta vacia se rechaza");
     }
 
-    // Ciudad real
     if (argc > 1) {
         try {
             Config city = loadConfig(argv[1]);

@@ -1,5 +1,3 @@
-// Pruebas de los tipos del dominio: nombres exactos, transiciones permitidas,
-// transiciones prohibidas y la regla de que un pedido es solo movible.
 #include <cstring>
 #include <iostream>
 #include <type_traits>
@@ -27,15 +25,14 @@ bool throwsInvalid(Order& o, OrderState next) {
     return false;
 }
 
-}  // namespace
+}
 
-// Un pedido nunca se copia: si esto compilara, podria existir en dos lugares.
 static_assert(!std::is_copy_constructible<Order>::value, "Order no debe ser copiable");
 static_assert(!std::is_copy_assignable<Order>::value, "Order no debe ser asignable por copia");
 static_assert(std::is_nothrow_move_constructible<Order>::value, "Order debe ser movible");
 
 int main() {
-    // Nombres exactos que exige la seccion 6.2 del enunciado
+
     check(std::strcmp(toString(OrderState::PickedUp), "pickedUp") == 0, "nombre de estado pickedUp");
     check(std::strcmp(toString(RejectReason::QueueFull), "queueFull") == 0, "motivo queueFull");
     check(std::strcmp(toString(RejectReason::Unreachable), "unreachable") == 0, "motivo unreachable");
@@ -44,7 +41,6 @@ int main() {
     check(std::strcmp(toString(EventType::CourierBreakdown), "courierBreakdown") == 0, "evento courierBreakdown");
     check(std::strcmp(toString(EventType::SimulationStopping), "simulationStopping") == 0, "evento simulationStopping");
 
-    // Camino normal completo
     {
         Order o;
         o.id = "o1";
@@ -57,7 +53,6 @@ int main() {
         check(throwsInvalid(o, OrderState::Pending), "desde un final no se sale ni a Pending");
     }
 
-    // Nunca hacia atras
     {
         Order o;
         o.id = "o2";
@@ -69,7 +64,6 @@ int main() {
         check(!canTransition(OrderState::Created, OrderState::Delivered), "no se salta a Delivered");
     }
 
-    // Rechazo solo antes de asignar, y Pending desde cualquier estado no final
     {
         Order o;
         o.id = "o3";
@@ -83,7 +77,6 @@ int main() {
         check(!canTransition(OrderState::Rejected, OrderState::Pending), "Rejected no pasa a Pending");
     }
 
-    // Un pedido movido existe en un solo lugar: el origen queda vacio
     {
         Order a;
         a.id = "o4";

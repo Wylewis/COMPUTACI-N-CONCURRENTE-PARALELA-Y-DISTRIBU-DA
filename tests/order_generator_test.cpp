@@ -1,7 +1,3 @@
-// Pruebas del generador de pedidos: reproducibilidad por semilla, limites de
-// las rafagas, tiempos que no retroceden, restaurantes y nodos validos,
-// preparacion dentro del rango, y rechazo por unreachable. Con la ruta del
-// config real como argumento, comprueba ademas la media de los intervalos.
 #include <cmath>
 #include <iostream>
 #include <set>
@@ -24,10 +20,6 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-// Misma ciudad chica que graph_test: B, C, D en circuito de un sentido,
-// E es un callejon al que se entra desde A y del que no se sale. El
-// restaurante r1 esta en E: desde ahi ningun nodo es alcanzable, asi que
-// todos sus pedidos nacen unreachable; los de r0 (en A) son todos alcanzables.
 Config smallCity(std::uint64_t seed, int burstMax) {
     Config cfg;
     cfg.nodes = {{"A", 0.0000, 0.0000}, {"B", 0.0000, 0.0009}, {"C", 0.0009, 0.0009},
@@ -56,13 +48,12 @@ std::vector<Flat> run(const Config& cfg, const Graph& g, int batches) {
     return out;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     const Config cfg = smallCity(7, 4);
     const Graph g(cfg);
 
-    // Reproducibilidad
     {
         const auto a = run(cfg, g, 300);
         const auto b = run(cfg, g, 300);
@@ -80,7 +71,6 @@ int main(int argc, char** argv) {
         check(differs, "otra semilla produce otra secuencia");
     }
 
-    // Reglas de cada rafaga y de cada pedido
     {
         OrderGenerator gen(cfg, g);
         std::int64_t lastAt = -1;
@@ -117,15 +107,14 @@ int main(int argc, char** argv) {
         }
         check(gen.created() == total, "created() cuenta todos los pedidos");
         check(bursts > 0, "hubo rafagas de mas de un pedido");
-        // Desde E (restaurante r1) no se llega a ningun nodo: debe haber rechazos
+
         check(unreachable > 0, "hubo pedidos unreachable desde el restaurante del callejon");
         check(unreachable < total, "y tambien pedidos alcanzables desde el otro restaurante");
         check(ids.size() == static_cast<std::size_t>(total), "ningun id repetido");
-        // El primer id es o0
+
         check(ids.count("o0") == 1, "los ids empiezan en o0");
     }
 
-    // burstMax 1: nunca hay rafagas
     {
         const Config one = smallCity(3, 1);
         OrderGenerator gen(one, g);
@@ -134,7 +123,6 @@ int main(int argc, char** argv) {
         check(allSingle, "con burstMax 1 cada rafaga tiene un pedido");
     }
 
-    // Ciudad real: media de los intervalos cercana a meanIntervalMs, y algun unreachable
     if (argc > 1) {
         try {
             Config city = loadConfig(argv[1]);

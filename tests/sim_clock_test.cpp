@@ -1,5 +1,3 @@
-// Pruebas del reloj simulado. No duermen: usan instantes reales construidos a
-// partir del inicio, asi la prueba es exacta y rapida.
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
@@ -19,12 +17,11 @@ void check(bool ok, const char* what) {
     }
 }
 
-}  // namespace
+}
 
 int main() {
     const auto t0 = SimClock::RealClock::now();
 
-    // timeScale 60: un segundo real son 60 segundos simulados
     {
         SimClock clock(60.0);
         clock.start(t0);
@@ -40,7 +37,6 @@ int main() {
         check(clock.simMsAt(clock.realTimeFor(123'456)) == 123'456, "ida y vuelta exacta");
     }
 
-    // timeScale 1: tiempo real y simulado coinciden
     {
         SimClock clock(1.0);
         clock.start(t0);
@@ -49,7 +45,6 @@ int main() {
               "con escala 1, esperar 1 500 ms simulados es 1.5 s real");
     }
 
-    // timeScale menor que 1: la simulacion va mas lenta que el reloj real
     {
         SimClock clock(0.5);
         clock.start(t0);
@@ -58,14 +53,12 @@ int main() {
               "con escala 0.5, 1 000 ms simulados son 2 s reales");
     }
 
-    // El tiempo simulado nunca es negativo, aunque se consulte antes del inicio
     {
         SimClock clock(60.0);
         clock.start(t0 + 10s);
         check(clock.simMsAt(t0) == 0, "antes del inicio el tiempo simulado es 0, no negativo");
     }
 
-    // Monotonia: instantes reales crecientes dan tiempos simulados no decrecientes
     {
         SimClock clock(37.5);
         clock.start(t0);
@@ -79,7 +72,6 @@ int main() {
         check(monotone, "el tiempo simulado nunca retrocede");
     }
 
-    // Escala invalida
     {
         bool threw = false;
         try {
@@ -97,7 +89,6 @@ int main() {
         check(threw, "timeScale negativo se rechaza");
     }
 
-    // nowMs() avanza con el reloj real
     {
         SimClock clock(1000.0);
         clock.start();

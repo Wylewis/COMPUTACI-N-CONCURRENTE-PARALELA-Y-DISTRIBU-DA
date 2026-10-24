@@ -1,7 +1,3 @@
-// Pruebas del pool de hilos: resultados por future, trabajos en hilos del
-// pool, excepciones que cruzan, orden con un solo hilo, apagado que termina
-// lo pendiente, rechazo despues de parar, y una comparacion de tiempo contra
-// un hilo por trabajo.
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -26,10 +22,10 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-}  // namespace
+}
 
 int main() {
-    // Resultados por future: 1000 trabajos, la suma de sus resultados es un reduce
+
     {
         ThreadPool pool(4);
         check(pool.size() == 4, "el pool tiene 4 hilos");
@@ -39,7 +35,7 @@ int main() {
         for (auto& f : results) sum += f.get();
         check(sum == 999LL * 1000, "la suma de los 1000 resultados es la esperada");
     }
-    // Los trabajos corren en hilos del pool, no en el que los envia
+
     {
         ThreadPool pool(3);
         std::mutex m;
@@ -55,7 +51,7 @@ int main() {
         check(ids.count(std::this_thread::get_id()) == 0, "ningun trabajo corrio en el hilo principal");
         check(!ids.empty() && ids.size() <= 3, "los trabajos usaron como mucho los 3 hilos del pool");
     }
-    // Una excepcion dentro de un trabajo llega por el future, y el pool sigue vivo
+
     {
         ThreadPool pool(2);
         auto bad = pool.submit([]() -> int { throw std::runtime_error("estimacion fallida"); });
@@ -68,7 +64,7 @@ int main() {
         check(threw, "la excepcion del trabajo se relanza en get()");
         check(pool.submit([] { return 7; }).get() == 7, "el pool sigue aceptando trabajos despues de una excepcion");
     }
-    // Con un solo hilo, los trabajos se ejecutan en orden de envio
+
     {
         ThreadPool pool(1);
         std::vector<int> order;
@@ -79,7 +75,7 @@ int main() {
         for (int i = 0; i < 50; ++i) sorted = sorted && order[i] == i;
         check(sorted, "con un hilo la cola es FIFO");
     }
-    // Parar termina lo pendiente: nada se pierde
+
     {
         std::atomic<int> done{0};
         {
@@ -90,11 +86,11 @@ int main() {
                     done.fetch_add(1);
                 });
             }
-            // el destructor llama a stop(): debe esperar los 40
+
         }
         check(done.load() == 40, "al destruir el pool se completan los trabajos encolados");
     }
-    // Despues de stop() no se aceptan trabajos, y stop() es idempotente
+
     {
         ThreadPool pool(2);
         pool.stop();
@@ -108,13 +104,13 @@ int main() {
         check(threw, "submit despues de stop lanza");
         check(pool.pending() == 0, "sin pendientes tras parar");
     }
-    // Un trabajo puede encolar otro sin bloquearse (el cerrojo no se retiene al ejecutar)
+
     {
         ThreadPool pool(1);
         auto outer = pool.submit([&pool] { return pool.submit([] { return 5; }); });
         check(outer.get().get() == 5, "un trabajo encola otro y ambos terminan, incluso con un solo hilo");
     }
-    // Tiempo: muchos trabajos chicos en el pool contra un hilo nuevo por trabajo
+
     {
         const int jobs = 2000;
         auto t0 = std::chrono::steady_clock::now();

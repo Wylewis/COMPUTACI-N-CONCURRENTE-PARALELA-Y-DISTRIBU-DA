@@ -22,10 +22,10 @@ void check(bool ok, const std::string& what) {
 
 RestaurantConfig cfg(int slots) { return {"r0", "Uno", "B", slots, 0, 0}; }
 
-}  // namespace
+}
 
 int main() {
-    {   // un puesto, tres motos que llegan en orden: pasan de a una y en ese orden
+    {
         Restaurant r(cfg(1));
         StopSignal stop;
         std::vector<std::string> order;
@@ -52,7 +52,7 @@ int main() {
         const QueueSnapshot s = r.snapshot();
         check(s.waiting.empty() && s.busy == 0 && s.slots == 1, "fila vacia y puestos libres al final");
     }
-    {   // dos puestos: dos pasan a la vez, el tercero espera a que uno salga
+    {
         Restaurant r(cfg(2));
         StopSignal stop;
         r.enterQueue("a"), r.enterQueue("b"), r.enterQueue("c");
@@ -65,7 +65,7 @@ int main() {
         tc.join();
         check(cIn && r.snapshot().busy == 2, "al salir uno, c pasa");
     }
-    {   // la parada saca de la fila a quien espera
+    {
         Restaurant r(cfg(1));
         StopSignal stop;
         r.enterQueue("a"), r.enterQueue("b");
@@ -78,7 +78,7 @@ int main() {
         tb.join();
         check(!got && r.snapshot().waiting.empty(), "b despierta con false y sale de la fila");
     }
-    {   // espera prevista por scan exclusivo
+    {
         check(expectedStartMs({60, 120, 60}, 1) == std::vector<std::int64_t>{0, 60, 180}, "un puesto: suma prefija de los servicios");
         check(expectedStartMs({60, 120, 60}, 2) == std::vector<std::int64_t>{0, 30, 90}, "dos puestos: la mitad");
         check(expectedStartMs({}, 1).empty(), "fila vacia");

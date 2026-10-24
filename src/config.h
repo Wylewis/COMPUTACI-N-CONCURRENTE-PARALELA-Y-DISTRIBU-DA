@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-// Error de configuracion: archivo ilegible, JSON mal formado, propiedad
-// faltante o con tipo invalido. El mensaje esta pensado para una persona.
 struct ConfigError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
@@ -19,7 +17,7 @@ struct Bounds {
 };
 
 struct MapConfig {
-    std::string image;        // tal como aparece en el JSON, relativa al archivo de configuracion
+    std::string image;
     std::string attribution;
     Bounds bounds;
 };
@@ -61,9 +59,9 @@ struct OrdersConfig {
 };
 
 struct DispatchConfig {
-    std::int64_t quoteTimeoutMs = 0;   // tiempo real
-    std::int64_t acceptTimeoutMs = 0;  // tiempo simulado
-    std::string estimator = "pool";  // serial | async | pool: como se calcula el map de estimaciones
+    std::int64_t quoteTimeoutMs = 0;
+    std::int64_t acceptTimeoutMs = 0;
+    std::string estimator = "pool";
 };
 
 struct IncidentsConfig {
@@ -71,8 +69,8 @@ struct IncidentsConfig {
 };
 
 struct SimulationConfig {
-    std::int64_t durationS = 0;  // 0: correr hasta recibir una senal
-    double timeScale = 1.0;      // segundos simulados por segundo real
+    std::int64_t durationS = 0;
+    double timeScale = 1.0;
 };
 
 struct Config {
@@ -86,20 +84,11 @@ struct Config {
     IncidentsConfig incidents;
     SimulationConfig simulation;
 
-    std::string configDir;  // directorio del archivo de configuracion
+    std::string configDir;
 
-    // Ruta de la imagen del mapa resuelta respecto al archivo de configuracion.
     std::string imagePath() const;
 };
 
-// Lee y decodifica el archivo de configuracion. Lanza ConfigError si el archivo
-// no se puede leer, el JSON esta mal formado, falta una propiedad obligatoria o
-// una propiedad tiene un tipo invalido. No valida referencias entre entidades.
 Config loadConfig(const std::string& path);
 
-// Comprueba lo que la seccion 5 del enunciado exige de un archivo valido:
-// al menos un nodo; calles, restaurantes y startNode que apuntan a nodos
-// existentes; los rangos que declara la tabla (couriers, bagCapacity, burstMax
-// y pickupSlots >= 1, breakdownProbability entre 0 y 1); y que la imagen del
-// mapa se pueda leer. Lanza ConfigError con el motivo.
 void validateConfig(const Config& cfg);

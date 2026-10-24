@@ -14,13 +14,6 @@
 #include "stop_signal.h"
 #include "thread_pool.h"
 
-// El despachador de un restaurante: toma pedidos de su cola del libro, copia
-// la flota, elige con selectCourier y asigna. Si nadie puede, duerme hasta que
-// la flota cambie; si la reserva falla porque otro despachador gano esa moto,
-// reintenta con copias frescas. Las estimaciones de cada anillo se calculan
-// en paralelo en el pool de estimacion, una tarea por candidato, con plazo
-// quoteTimeoutMs real y las tardias ignoradas. Si vence acceptTimeoutMs desde la creacion
-// sin moto, rechaza con noCourier. Al parar devuelve el pedido al libro.
 class DispatcherThread {
 public:
     DispatcherThread(const RestaurantConfig& restaurant, OrderBook& book, Fleet& fleet, const Graph& graph,
@@ -31,7 +24,7 @@ public:
     DispatcherThread& operator=(const DispatcherThread&) = delete;
 
     void start();
-    void join();  // despues de stop.request() y book.close()
+    void join();
 
     std::int64_t assigned() const { return assigned_.load(std::memory_order_acquire); }
     std::int64_t retries() const { return retries_.load(std::memory_order_acquire); }
@@ -42,7 +35,7 @@ public:
 private:
     void run();
     enum class Outcome { Assigned, Rejected, Stopped };
-    Outcome dispatch(Order& order);  // Stopped deja el pedido intacto en `order`
+    Outcome dispatch(Order& order);
 
     const RestaurantConfig restaurant_;
     OrderBook& book_;
@@ -51,7 +44,7 @@ private:
     const double speedKmh_;
     const std::int64_t acceptTimeoutMs_;
     const std::chrono::milliseconds quoteTimeout_;
-    const std::string estimator_;  // serial | async | pool
+    const std::string estimator_;
     ThreadPool& estimators_;
     EventLogger& logger_;
     const SimClock& clock_;

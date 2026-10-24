@@ -1,5 +1,3 @@
-// Prueba sin pantalla: dibuja la capa estatica en memoria y la revisa.
-// Recibe la ruta de config/equipetrol.json como argumento.
 #include <iostream>
 #include <string>
 
@@ -20,7 +18,7 @@ bool isColor(const cv::Vec3b& px, const cv::Scalar& c) {
     return px[0] == c[0] && px[1] == c[1] && px[2] == c[2];
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) {

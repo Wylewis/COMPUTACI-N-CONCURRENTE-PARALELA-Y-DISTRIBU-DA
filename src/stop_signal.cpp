@@ -8,12 +8,11 @@
 
 void StopSignal::request() {
     {
-        // El cerrojo garantiza que nadie este entre "revisar la bandera" y
-        // "dormirse" cuando se notifica: sin el, ese hilo perderia el aviso.
+
         std::lock_guard<std::mutex> lock(mutex_);
         flag_.store(true, std::memory_order_release);
     }
-    cv_.notify_all();  // todos los que esperan deben despertar, no solo uno
+    cv_.notify_all();
 }
 
 void StopSignal::wait() const {
@@ -21,14 +20,8 @@ void StopSignal::wait() const {
     cv_.wait(lock, [this] { return flag_.load(std::memory_order_acquire); });
 }
 
-// ---------------------------------------------------------------------------
-// SignalWatcher
-// ---------------------------------------------------------------------------
-
 namespace {
 
-// Extremo de escritura del pipe que usa el manejador. Es la unica variable
-// global: el manejador de senal no recibe argumentos.
 std::atomic<int> gSignalPipe{-1};
 std::atomic<int> gWatchers{0};
 
@@ -36,13 +29,12 @@ void onSignal(int) {
     const int fd = gSignalPipe.load(std::memory_order_acquire);
     if (fd >= 0) {
         const char byte = 's';
-        // write() es segura dentro de un manejador de senal; el valor de
-        // retorno se ignora a proposito: si el pipe esta lleno ya hay un aviso.
+
         (void)!::write(fd, &byte, 1);
     }
 }
 
-}  // namespace
+}
 
 SignalWatcher::SignalWatcher(StopSignal& stop) : stop_(stop) {
     if (gWatchers.fetch_add(1) != 0) {
@@ -66,8 +58,7 @@ SignalWatcher::SignalWatcher(StopSignal& stop) : stop_(stop) {
 }
 
 SignalWatcher::~SignalWatcher() {
-    // Restaurar el comportamiento por defecto antes de cerrar el pipe, asi
-    // una senal tardia no escribe en un descriptor cerrado.
+
     struct sigaction action {};
     action.sa_handler = SIG_DFL;
     sigemptyset(&action.sa_mask);
@@ -75,7 +66,6 @@ SignalWatcher::~SignalWatcher() {
     sigaction(SIGTERM, &action, nullptr);
     gSignalPipe.store(-1, std::memory_order_release);
 
-    // Despertar al vigia aunque no haya llegado ninguna senal.
     const char byte = 'q';
     (void)!::write(pipeFds_[1], &byte, 1);
     if (thread_.joinable()) thread_.join();
@@ -88,12 +78,12 @@ SignalWatcher::~SignalWatcher() {
 void SignalWatcher::watch() {
     char byte = 0;
     for (;;) {
-        const ssize_t n = ::read(pipeFds_[0], &byte, 1);  // duerme aqui, sin CPU
+        const ssize_t n = ::read(pipeFds_[0], &byte, 1);
         if (n <= 0) {
             if (n < 0 && errno == EINTR) continue;
             return;
         }
-        if (byte == 'q') return;  // el destructor pide salir
+        if (byte == 'q') return;
         received_.fetch_add(1, std::memory_order_acq_rel);
         stop_.request();
     }

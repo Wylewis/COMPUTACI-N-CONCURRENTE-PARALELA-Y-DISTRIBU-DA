@@ -1,6 +1,3 @@
-// Pruebas de la proyeccion del mapa: esquinas, centro, ida y vuelta, puntos
-// fuera, limites invalidos, y con la ciudad real que todos los nodos y
-// restaurantes caen dentro de la imagen.
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -24,7 +21,7 @@ bool near(double a, double b, double tol) {
     return std::fabs(a - b) <= tol;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     Bounds b;
@@ -34,7 +31,6 @@ int main(int argc, char** argv) {
     b.east = -63.18;
     const MapProjection proj(b, 200, 400);
 
-    // Esquinas
     {
         const Pixel nw = proj.toPixel(b.north, b.west);
         check(near(nw.x, 0, 1e-9) && near(nw.y, 0, 1e-9), "la esquina noroeste es (0, 0)");
@@ -43,7 +39,7 @@ int main(int argc, char** argv) {
         const Pixel ne = proj.toPixel(b.north, b.east);
         check(near(ne.x, 200, 1e-9) && near(ne.y, 0, 1e-9), "la esquina noreste es (ancho, 0)");
     }
-    // Centro y proporciones: la latitud crece hacia arriba, el pixel y hacia abajo
+
     {
         const Pixel c = proj.toPixel(-17.76, -63.19);
         check(near(c.x, 100, 1e-6) && near(c.y, 200, 1e-6), "el centro geografico es el centro de la imagen");
@@ -53,7 +49,7 @@ int main(int argc, char** argv) {
         const Pixel down = proj.toPixel(-17.769, -63.19);
         check(up.y < down.y, "mas al norte es un y menor");
     }
-    // Ida y vuelta
+
     {
         const double lat0 = -17.7634, lon0 = -63.1912;
         const Pixel p = proj.toPixel(lat0, lon0);
@@ -61,7 +57,7 @@ int main(int argc, char** argv) {
         proj.toGeo(p, lat, lon);
         check(near(lat, lat0, 1e-12) && near(lon, lon0, 1e-12), "toGeo deshace a toPixel");
     }
-    // Dentro y fuera
+
     {
         check(proj.contains(-17.76, -63.19), "el centro esta dentro");
         check(proj.contains(b.north, b.west) && proj.contains(b.south, b.east), "los bordes cuentan como dentro");
@@ -70,12 +66,12 @@ int main(int argc, char** argv) {
         const Pixel out = proj.toPixel(-17.74, -63.21);
         check(out.x < 0 && out.y < 0, "un punto fuera da pixeles negativos, no se recorta");
     }
-    // Escala: la imagen de 200 px cubre 0.02 grados de longitud, unos 2.1 km
+
     {
         const double mpp = proj.metersPerPixel();
         check(mpp > 5.0 && mpp < 12.0, "metros por pixel plausibles para este recuadro");
     }
-    // Limites invalidos
+
     {
         bool threw = false;
         Bounds bad = b;
@@ -87,7 +83,6 @@ int main(int argc, char** argv) {
         check(threw, "ancho 0 se rechaza");
     }
 
-    // Ciudad real: todos los nodos dentro de la imagen de 712 x 991
     if (argc > 1) {
         try {
             Config city = loadConfig(argv[1]);

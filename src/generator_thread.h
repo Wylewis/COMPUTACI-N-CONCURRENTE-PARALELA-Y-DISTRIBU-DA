@@ -10,13 +10,6 @@
 #include "sim_clock.h"
 #include "stop_signal.h"
 
-// El hilo que crea los pedidos durante toda la ejecucion.
-//
-// Itera sobre las rafagas que produce OrderGenerator: duerme hasta el instante
-// simulado de la proxima (o hasta la orden de parar, lo que ocurra primero),
-// entrega la rafaga al libro de pedidos y publica orderCreated por cada
-// pedido y orderRejected por los que el libro o el generador rechazaron.
-// Termina cuando se pide parar; join() lo une.
 class GeneratorThread {
 public:
     GeneratorThread(OrderGenerator& generator, OrderBook& book, EventLogger& logger,

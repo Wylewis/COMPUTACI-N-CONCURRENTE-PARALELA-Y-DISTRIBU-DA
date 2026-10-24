@@ -1,6 +1,3 @@
-// Pruebas del log de eventos: una linea JSON valida por evento con solo los
-// campos que corresponden, contadores iguales a las lineas escritas, y el
-// resumen con el formato de la seccion 6.3.
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -38,7 +35,7 @@ bool hasExactly(const json& j, const std::vector<std::string>& keys) {
     return true;
 }
 
-}  // namespace
+}
 
 int main() {
     const std::string path = "event_log_test.tmp.log";
@@ -49,7 +46,7 @@ int main() {
     {
         EventLog log(path, {"c0", "c1"});
         log.write(Event::orderCreated(1000, "o1", "r0"));
-        log.write(Event::orderCreated(1000, "o2", "r0"));       // misma t: rafaga
+        log.write(Event::orderCreated(1000, "o2", "r0"));
         log.write(Event::orderCreated(1200, "o3", "r1"));
         log.write(Event::orderRejected(1200, "o3", RejectReason::Unreachable));
         log.write(Event::orderAssigned(1500, "o1", "c0"));
@@ -58,7 +55,7 @@ int main() {
         log.write(Event::orderPickedUp(4500, "o1", "c0", "r0"));
         log.write(Event::courierBreakdown(5000, "c1"));
         log.write(Event::orderReassigned(5000, "o2", "c1", "c0"));
-        log.write(Event::orderDelivered(9000, "o1", "c0"));     // 8000 ms desde su creacion
+        log.write(Event::orderDelivered(9000, "o1", "c0"));
         log.write(Event::orderCreated(9500, "o4", "r1"));
         log.write(Event::simulationStopping(10000));
         written = log.linesWritten();
@@ -71,7 +68,6 @@ int main() {
     check(static_cast<std::int64_t>(lines.size()) == written, "el archivo tiene tantas lineas como eventos escritos");
     check(lines.size() == 13, "se escribieron 13 lineas");
 
-    // Cada linea es un objeto JSON completo por si solo
     std::vector<json> parsed;
     for (const auto& l : lines) {
         try {
@@ -99,7 +95,6 @@ int main() {
         check(lines[0].rfind("{\"t\":", 0) == 0, "t es la primera clave de la linea");
     }
 
-    // El resumen coincide con las lineas del log
     check(summary.created == 4, "created = 4 lineas orderCreated");
     check(summary.delivered == 1, "delivered = 1 linea orderDelivered");
     check(summary.rejected == 1, "rejected = 1 linea orderRejected");
@@ -120,7 +115,6 @@ int main() {
     check(sj["deliveredPerCourier"]["c0"] == 1, "deliveredPerCourier en el JSON del resumen");
     check(s.find('\n') == std::string::npos, "el resumen es una sola linea");
 
-    // Promedio con varias entregas: (8000 + 3000) / 2 = 5500
     {
         EventLog log(path);
         log.write(Event::orderCreated(0, "a", "r0"));
@@ -133,18 +127,16 @@ int main() {
               "sin lista previa, aparecen solo los repartidores que entregaron");
     }
 
-    // El tiempo de un pedido nunca retrocede en el log
     {
         EventLog log(path);
         log.write(Event::orderCreated(5000, "x", "r0"));
-        log.write(Event::orderAssigned(4000, "x", "c0"));   // t menor: se escribe 5000
+        log.write(Event::orderAssigned(4000, "x", "c0"));
         log.close();
         const auto l = readLines(path);
         check(l.size() == 2 && json::parse(l[1])["t"] == 5000, "un t menor se eleva al t anterior del pedido");
         check(log.clockFixes() == 1, "el ajuste se cuenta");
     }
 
-    // Escribir despues de cerrar es un error de programacion
     {
         EventLog log(path);
         log.close();
@@ -157,7 +149,6 @@ int main() {
         check(threw, "escribir en un log cerrado lanza");
     }
 
-    // Ruta imposible de abrir
     {
         bool threw = false;
         try {

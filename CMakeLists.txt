@@ -66,7 +66,10 @@ add_executable(delivery_sim
   src/restaurants.cpp
   src/breakdown.cpp
   src/live_counters.cpp
+  src/bench/bench.cpp
+  src/bench/bench_apps.cpp
 )
+target_include_directories(delivery_sim PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Kernels de GPU: una biblioteca con los .cu. Con USE_CUDA los compila nvcc; sin
 # ella son C++17 normal sobre la emulacion del curso, asi el proyecto se
@@ -355,6 +358,7 @@ add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
 # Integracion: corridas completas por tiempo cumplido, SIGINT y SIGTERM,
 # verificadas con el verificador del log.
+add_test(NAME bench_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_bench_test.sh $<TARGET_FILE:delivery_sim>)
 add_test(NAME experiments_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_experiments_test.sh $<TARGET_FILE:delivery_sim>)
 add_test(NAME sim_tests COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_sim_tests.sh $<TARGET_FILE:delivery_sim>)
 

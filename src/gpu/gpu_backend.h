@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <string>
 
+#include "gpu_timing_types.h"
+
 struct GpuDeviceInfo {
     std::string backend;
     std::string name;
@@ -15,5 +17,7 @@ struct GpuDeviceInfo {
 };
 
 GpuDeviceInfo gpuDeviceInfo();
+
+GpuTimes gpuVectorAdd(const int* a, const int* b, int* out, int n);
 
 bool gpuSelfTest(int n);

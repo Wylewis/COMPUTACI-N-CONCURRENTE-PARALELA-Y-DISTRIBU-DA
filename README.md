@@ -319,6 +319,30 @@ python3 tools/extract_network.py --zone data/equipetrol_zone.json --out data/equ
 python3 tools/make_config.py
 ```
 
+## Mediciones de CPU contra GPU
+
+El modo de medición corre sin ventana y escribe un CSV con una línea por corrida: aplicación,
+concepto, versión, hilos, tamaño, elementos, repetición, tiempo en milisegundos y si el resultado
+fue correcto. De ese archivo salen todas las tablas y gráficos.
+
+```sh
+./delivery_sim ../config/ciudad.json --headless --bench resultados.csv
+```
+
+Para cada aplicación y cada tamaño mide cuatro versiones: `cpu_1` (un hilo), `cpu_n` (multihilo
+sobre el pool), `gpu_kernel` (solo los kernels, con eventos CUDA) y `gpu_e2e` (kernels más copias
+y reserva de memoria). Hace una corrida de calentamiento y diez medidas, con las versiones
+intercaladas en cada repetición, y comprueba el resultado en todas. Opciones: `--bench-reps <n>`,
+`--bench-once` (una corrida sin calentamiento, para los perfiladores), `--bench-sweep` (la versión
+multihilo con 1, 2, 4... hilos), `--bench-threads <n>`, `--bench-apps <a,b>` y
+`--bench-max-items <n>`. Las versiones de GPU solo se miden con una GPU real: compilado con la
+emulación (`USE_CUDA` apagado) el CSV trae solo las de CPU, porque los tiempos de la emulación no
+dicen nada de una GPU.
+
+Para compilar con una GPU NVIDIA: `cmake -DUSE_CUDA=ON .. && make`. Todo kernel se lanza desde un
+único hilo dueño de la GPU (`src/gpu/gpu_worker`); los demás hilos le envían trabajo por una cola y
+esperan el resultado por un `future`.
+
 ### Configuración de ciudad
 
 `config/ciudad.json` es la escala grande para las mediciones de GPU: un rectángulo de unos 5,5 por

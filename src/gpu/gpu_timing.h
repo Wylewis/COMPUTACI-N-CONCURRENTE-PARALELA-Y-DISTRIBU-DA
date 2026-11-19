@@ -1,11 +1,7 @@
 #pragma once
 
 #include "cuda_compat.h"
-
-struct GpuTimes {
-    double kernelMs = 0.0;
-    double totalMs = 0.0;
-};
+#include "gpu_timing_types.h"
 
 #ifdef __CUDACC__
 class DeviceTimer {

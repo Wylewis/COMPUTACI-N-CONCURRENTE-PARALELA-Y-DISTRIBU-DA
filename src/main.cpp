@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "bench/bench.h"
 #include "config.h"
 #include "dispatcher_thread.h"
 #include "distance_table_parallel.h"
@@ -31,10 +32,39 @@ struct Options {
     std::string configPath;
     std::string logPath = "events.log";
     bool window = true;
+    bool bench = false;
+    BenchOptions benchOptions;
 };
 
 void printUsage(std::ostream& out) {
-    out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window]\n";
+    out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless]\n"
+           "       delivery_sim <config.json> --headless --bench <resultados.csv> [--bench-once] [--bench-reps <n>]\n"
+           "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n";
+}
+
+std::vector<std::string> splitCommas(const std::string& text) {
+    std::vector<std::string> out;
+    std::string current;
+    for (const char ch : text) {
+        if (ch == ',') {
+            if (!current.empty()) out.push_back(current);
+            current.clear();
+        } else {
+            current += ch;
+        }
+    }
+    if (!current.empty()) out.push_back(current);
+    return out;
+}
+
+bool parsePositive(const std::string& text, unsigned long long& value) {
+    if (text.empty() || text.find_first_not_of("0123456789") != std::string::npos) return false;
+    try {
+        value = std::stoull(text);
+    } catch (const std::exception&) {
+        return false;
+    }
+    return value > 0;
 }
 
 bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
@@ -51,8 +81,35 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
                 return false;
             }
             opts.logPath = argv[++i];
-        } else if (arg == "--no-window") {
+        } else if (arg == "--no-window" || arg == "--headless") {
             opts.window = false;
+        } else if (arg == "--bench") {
+            if (i + 1 >= argc) {
+                error = "--bench requiere la ruta del CSV";
+                return false;
+            }
+            opts.bench = true;
+            opts.benchOptions.csvPath = argv[++i];
+        } else if (arg == "--bench-once") {
+            opts.benchOptions.once = true;
+        } else if (arg == "--bench-sweep") {
+            opts.benchOptions.sweep = true;
+        } else if (arg == "--bench-apps") {
+            if (i + 1 >= argc) {
+                error = "--bench-apps requiere una lista separada por comas";
+                return false;
+            }
+            opts.benchOptions.apps = splitCommas(argv[++i]);
+        } else if (arg == "--bench-reps" || arg == "--bench-threads" || arg == "--bench-max-items") {
+            unsigned long long value = 0;
+            if (i + 1 >= argc || !parsePositive(argv[i + 1], value)) {
+                error = arg + " requiere un entero positivo";
+                return false;
+            }
+            ++i;
+            if (arg == "--bench-reps") opts.benchOptions.reps = static_cast<int>(value);
+            if (arg == "--bench-threads") opts.benchOptions.threads = static_cast<unsigned>(value);
+            if (arg == "--bench-max-items") opts.benchOptions.maxItems = static_cast<std::size_t>(value);
         } else {
             error = "argumento desconocido: " + arg;
             return false;
@@ -103,6 +160,7 @@ int main(int argc, char** argv) {
             std::cerr << "delivery_sim: el kernel de prueba no dio el resultado esperado\n";
             return 1;
         }
+        if (opts.bench) return runBenchmarks(opts.benchOptions, config, graph, gpuWorker, gpu.realGpu);
 
         ThreadPool estimators(recommendedPoolSize());
         std::cerr << "delivery_sim: pool de estimacion de " << estimators.size() << " hilos (hardware: "

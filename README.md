@@ -343,6 +343,18 @@ Para compilar con una GPU NVIDIA: `cmake -DUSE_CUDA=ON .. && make`. Todo kernel 
 único hilo dueño de la GPU (`src/gpu/gpu_worker`); los demás hilos le envían trabajo por una cola y
 esperan el resultado por un `future`.
 
+La ocupación de cada kernel la informa el propio programa, con
+`cudaOccupancyMaxActiveBlocksPerMultiprocessor` y los atributos de la función, para las máquinas
+donde Nsight Compute no puede leer los contadores de la tarjeta:
+
+```sh
+./delivery_sim ../config/equipetrol.json --gpu-info
+```
+
+Imprime el dispositivo y una línea por kernel: hilos por bloque, bloques activos por
+multiprocesador, registros por hilo, memoria compartida por bloque, ocupación y qué recurso la
+limita. Compilado con la emulación deja esas columnas vacías.
+
 ### Aplicaciones de GPU
 
 Cada aplicación tiene su versión de CPU de un hilo, su versión multihilo, su kernel y una prueba

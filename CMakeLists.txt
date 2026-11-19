@@ -92,6 +92,7 @@ else()
 endif()
 add_library(delivery_gpu STATIC ${GPU_SOURCES}
   src/gpu/gpu_worker.cpp
+  src/gpu/gpu_kernels.cpp
   src/gpu/travel_table_cpu.cpp
   src/thread_pool.cpp
 )
@@ -154,6 +155,7 @@ endfunction()
 add_gpu_test(gpu_backend_test)
 add_gpu_test(gpu_worker_test)
 add_gpu_test(travel_table_test)
+add_gpu_test(gpu_occupancy_test)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

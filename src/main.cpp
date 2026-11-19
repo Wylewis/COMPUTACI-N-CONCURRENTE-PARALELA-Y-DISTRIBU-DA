@@ -12,6 +12,7 @@
 #include "fleet.h"
 #include "generator_thread.h"
 #include "gpu/gpu_backend.h"
+#include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -35,12 +36,14 @@ struct Options {
     std::string logPath = "events.log";
     bool window = true;
     bool gpuBackend = false;
+    bool gpuInfo = false;
     bool bench = false;
     BenchOptions benchOptions;
 };
 
 void printUsage(std::ostream& out) {
     out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless] [--backend cpu|gpu]\n"
+           "       delivery_sim <config.json> --gpu-info\n"
            "       delivery_sim <config.json> --headless --bench <resultados.csv> [--bench-once] [--bench-reps <n>]\n"
            "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n";
 }
@@ -86,6 +89,8 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
             opts.logPath = argv[++i];
         } else if (arg == "--no-window" || arg == "--headless") {
             opts.window = false;
+        } else if (arg == "--gpu-info") {
+            opts.gpuInfo = true;
         } else if (arg == "--backend") {
             if (i + 1 >= argc || (std::string(argv[i + 1]) != "cpu" && std::string(argv[i + 1]) != "gpu")) {
                 error = "--backend requiere cpu o gpu";
@@ -168,6 +173,24 @@ int main(int argc, char** argv) {
         if (!gpuWorker.submit([] { return gpuSelfTest(256); }).get()) {
             std::cerr << "delivery_sim: el kernel de prueba no dio el resultado esperado\n";
             return 1;
+        }
+        if (opts.gpuInfo) {
+            std::cout << "dispositivo: " << gpu.name << "; multiprocesadores: " << gpu.multiprocessors
+                      << "; hilos por bloque: " << gpu.maxThreadsPerBlock << "; memoria global: "
+                      << gpu.globalMemBytes / (1024 * 1024) << " MiB; memoria compartida por bloque: "
+                      << gpu.sharedMemPerBlock / 1024 << " KiB\n";
+            std::cout << "aplicacion,kernel,hilos_por_bloque,bloques_por_multiprocesador,registros_por_hilo,"
+                         "memoria_compartida_bytes,ocupacion_pct,limitante\n";
+            for (const GpuKernelInfo& k : gpuWorker.submit([] { return gpuKernelInfos(); }).get()) {
+                std::cout << k.application << ',' << k.kernel << ',' << k.threadsPerBlock << ',';
+                if (k.measured)
+                    std::cout << k.blocksPerMultiprocessor << ',' << k.registersPerThread << ',' << k.sharedBytesPerBlock
+                              << ',' << k.occupancyPercent << ',';
+                else
+                    std::cout << "-,-,-,-,";
+                std::cout << k.limiter << '\n';
+            }
+            return 0;
         }
         if (opts.bench) return runBenchmarks(opts.benchOptions, config, graph, gpuWorker, gpu.realGpu);
         if (opts.gpuBackend && !gpu.realGpu) {

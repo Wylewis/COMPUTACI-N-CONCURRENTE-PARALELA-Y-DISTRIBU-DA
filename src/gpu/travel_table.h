@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "gpu_kernel_info.h"
 #include "gpu_timing_types.h"
 #include "thread_pool.h"
 
@@ -18,6 +19,7 @@ struct CsrGraph {
 std::vector<int> travelTableCpu(const CsrGraph& g);
 std::vector<int> travelTableCpuParallel(const CsrGraph& g, ThreadPool& pool);
 std::vector<int> travelTableGpu(const CsrGraph& g, GpuTimes* times = nullptr, int* squarings = nullptr);
+GpuKernelInfo travelTableKernelInfo();
 
 class TravelTable {
 public:

@@ -1,6 +1,7 @@
 #include "travel_table.h"
 
 #include "cuda_compat.h"
+#include "gpu_occupancy.h"
 #include "gpu_timing.h"
 
 constexpr int TRAVEL_TILE = 16;
@@ -37,6 +38,10 @@ __global__ void minPlusTiledKernel(const int* A, int* C, int n, int* changed) {
             if (flag.load(cuda::memory_order_relaxed) == 0) flag.store(1, cuda::memory_order_relaxed);
         }
     }
+}
+
+GpuKernelInfo travelTableKernelInfo() {
+    return kernelOccupancy("travel_table", "minPlusTiledKernel", minPlusTiledKernel, TRAVEL_TILE * TRAVEL_TILE);
 }
 
 std::vector<int> travelTableGpu(const CsrGraph& g, GpuTimes* times, int* squarings) {

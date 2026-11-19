@@ -28,6 +28,8 @@ function(apply_sanitizers target)
   endif()
 endfunction()
 
+option(USE_CUDA "Compilar los kernels .cu con nvcc para una GPU NVIDIA; apagado, los mismos .cu se compilan como C++ con la emulacion de ec2/common/cuda_compat.h" OFF)
+
 find_package(Threads REQUIRED)
 find_package(OpenCV CONFIG)
 if(OpenCV_FOUND)
@@ -66,12 +68,43 @@ add_executable(delivery_sim
   src/live_counters.cpp
 )
 
+# Kernels de GPU: una biblioteca con los .cu. Con USE_CUDA los compila nvcc; sin
+# ella son C++17 normal sobre la emulacion del curso, asi el proyecto se
+# construye y se prueba en una maquina sin GPU.
+set(GPU_SOURCES
+  src/gpu/gpu_backend.cu
+)
+if(USE_CUDA)
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES native)
+  endif()
+  enable_language(CUDA)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  find_package(CUDAToolkit REQUIRED)
+  message(STATUS "USE_CUDA: kernels compilados con nvcc ${CMAKE_CUDA_COMPILER_VERSION}")
+else()
+  set_source_files_properties(${GPU_SOURCES} PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-x;c++")
+  message(STATUS "USE_CUDA apagado: kernels compilados como C++ con la emulacion de cuda_compat.h")
+endif()
+add_library(delivery_gpu STATIC ${GPU_SOURCES})
+target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(delivery_gpu SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/ec2/common)
+target_link_libraries(delivery_gpu PUBLIC Threads::Threads)
+if(USE_CUDA)
+  target_link_libraries(delivery_gpu PUBLIC CUDA::cudart)
+  target_compile_definitions(delivery_gpu PUBLIC USE_CUDA=1)
+else()
+  target_compile_options(delivery_gpu PRIVATE -Wall -Wextra)
+endif()
+apply_sanitizers(delivery_gpu)
+
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
 # para que sus cabeceras no generen warnings bajo -Wall -Wextra.
 target_include_directories(delivery_sim SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 
 target_compile_options(delivery_sim PRIVATE -Wall -Wextra)
-target_link_libraries(delivery_sim PRIVATE Threads::Threads)
+target_link_libraries(delivery_sim PRIVATE Threads::Threads delivery_gpu)
 if(OpenCV_FOUND)
   target_sources(delivery_sim PRIVATE src/window.cpp src/fleet_view.cpp)
   target_include_directories(delivery_sim SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
@@ -99,6 +132,19 @@ apply_sanitizers(delivery_sim)
 
 # Pruebas unitarias: se construyen con `make` y se ejecutan con `ctest`.
 enable_testing()
+
+# Pruebas de los kernels: cada una enlaza la biblioteca delivery_gpu, con nvcc
+# o con la emulacion segun USE_CUDA.
+function(add_gpu_test name)
+  add_executable(${name} tests/gpu/${name}.cpp ${ARGN})
+  target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_include_directories(${name} SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+  target_compile_options(${name} PRIVATE -Wall -Wextra)
+  target_link_libraries(${name} PRIVATE delivery_gpu)
+  apply_sanitizers(${name})
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
+add_gpu_test(gpu_backend_test)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

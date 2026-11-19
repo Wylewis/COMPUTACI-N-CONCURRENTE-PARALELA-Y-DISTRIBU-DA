@@ -10,6 +10,7 @@
 #include "event_logger.h"
 #include "fleet.h"
 #include "generator_thread.h"
+#include "gpu/gpu_backend.h"
 #include "graph.h"
 #include "hardware.h"
 #include "order_book.h"
@@ -93,6 +94,9 @@ int main(int argc, char** argv) {
                                  std::chrono::steady_clock::now() - t0).count();
         std::cerr << "delivery_sim: tabla de distancias de " << distances.originCount() << " restaurantes en "
                   << buildUs << " us con " << defaultTaskCount(origins.size()) << " tareas\n";
+
+        const GpuDeviceInfo gpu = gpuDeviceInfo();
+        std::cerr << "delivery_sim: backend de GPU: " << gpu.backend << " (" << gpu.name << ")\n";
 
         ThreadPool estimators(recommendedPoolSize());
         std::cerr << "delivery_sim: pool de estimacion de " << estimators.size() << " hilos (hardware: "

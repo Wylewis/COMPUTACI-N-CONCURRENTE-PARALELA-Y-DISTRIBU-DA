@@ -87,7 +87,9 @@ else()
   set_source_files_properties(${GPU_SOURCES} PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-x;c++")
   message(STATUS "USE_CUDA apagado: kernels compilados como C++ con la emulacion de cuda_compat.h")
 endif()
-add_library(delivery_gpu STATIC ${GPU_SOURCES})
+add_library(delivery_gpu STATIC ${GPU_SOURCES}
+  src/gpu/gpu_worker.cpp
+)
 target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(delivery_gpu SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/ec2/common)
 target_link_libraries(delivery_gpu PUBLIC Threads::Threads)
@@ -145,6 +147,7 @@ function(add_gpu_test name)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 add_gpu_test(gpu_backend_test)
+add_gpu_test(gpu_worker_test)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

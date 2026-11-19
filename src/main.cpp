@@ -11,6 +11,7 @@
 #include "fleet.h"
 #include "generator_thread.h"
 #include "gpu/gpu_backend.h"
+#include "gpu/gpu_worker.h"
 #include "graph.h"
 #include "hardware.h"
 #include "order_book.h"
@@ -97,6 +98,11 @@ int main(int argc, char** argv) {
 
         const GpuDeviceInfo gpu = gpuDeviceInfo();
         std::cerr << "delivery_sim: backend de GPU: " << gpu.backend << " (" << gpu.name << ")\n";
+        GpuWorker gpuWorker;
+        if (!gpuWorker.submit([] { return gpuSelfTest(256); }).get()) {
+            std::cerr << "delivery_sim: el kernel de prueba no dio el resultado esperado\n";
+            return 1;
+        }
 
         ThreadPool estimators(recommendedPoolSize());
         std::cerr << "delivery_sim: pool de estimacion de " << estimators.size() << " hilos (hardware: "

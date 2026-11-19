@@ -14,8 +14,9 @@ misma maquina. Escribe en --out:
 
   tabla.md    una fila por tamano: mediana y dispersion de cada version, el
               speedup de la GPU contra la mejor CPU y si el resultado fue
-              correcto; la misma tabla con la CPU de la maquina de la GPU; y
-              el barrido de hilos.
+              correcto; la misma tabla con la CPU de la maquina de la GPU; las
+              variantes de GPU que la aplicacion haya medido; y el barrido de
+              hilos.
   tiempo.png  tiempo contra tamano en ejes log-log, las cuatro versiones, con
               el cruce marcado si la GPU de punta a punta alcanza a la CPU.
   copias.png  parte del tiempo de GPU que se va en copias y en el kernel.
@@ -89,6 +90,21 @@ def table_block(title, cpu_summary, gpu_summary, n_threads, cpu_machine):
                      f"{fmt(e)} | {best:.3f} ({which}) | {speed(best, k)} / {speed(best, e)} | "
                      f"{'sí' if wrong == 0 else f'NO ({wrong})'} |")
     lines += ["", f"Tiempos de CPU: {cpu_machine}. Mediana de las repeticiones y, entre paréntesis, mínimo y máximo.", ""]
+    return lines
+
+
+def variants_block(gpu_summary):
+    extra = sorted(v for v in gpu_summary.version.unique() if v.startswith("gpu_") and v not in ("gpu_kernel", "gpu_e2e"))
+    if not extra:
+        return []
+    columns = ["gpu_kernel", "gpu_e2e"] + extra
+    tables = {v: pick(gpu_summary, v) for v in columns}
+    lines = ["### Variantes de GPU", "", "Mediana en ms de cada variante medida en la misma corrida.", "",
+             "| Tamaño | " + " | ".join(f"`{v}`" for v in columns) + " |", "|---|" + "---|" * len(columns)]
+    for items in tables["gpu_e2e"].index:
+        lines.append(f"| {tables['gpu_e2e'].loc[items, 'size']} | " +
+                     " | ".join(f"{tables[v].loc[items, 'median']:.3f}" if items in tables[v].index else "—" for v in columns) + " |")
+    lines.append("")
     return lines
 
 
@@ -224,6 +240,7 @@ def main():
     lines.append("Cruce de punta a punta contra la mejor CPU de la misma máquina: " +
                  (f"**{cross_same[1]}** ({cross_same[0]} elementos)." if cross_same[0] is not None else "**no hay cruce en el rango medido**."))
     lines.append("")
+    lines += variants_block(gpu)
     sweep_lines, sweep = sweep_table(laptop, args.laptop_name)
     lines += sweep_lines
     sweep_lines_gpu, _ = sweep_table(gpu, args.gpu_name)

@@ -51,7 +51,6 @@ add_executable(delivery_sim
   src/distance_table.cpp
   src/distance_table_parallel.cpp
   src/map_projection.cpp
-  src/thread_pool.cpp
   src/hardware.cpp
   src/stop_signal.cpp
   src/event_logger.cpp
@@ -76,6 +75,7 @@ target_include_directories(delivery_sim PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # construye y se prueba en una maquina sin GPU.
 set(GPU_SOURCES
   src/gpu/gpu_backend.cu
+  src/gpu/travel_table.cu
 )
 if(USE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
@@ -92,6 +92,8 @@ else()
 endif()
 add_library(delivery_gpu STATIC ${GPU_SOURCES}
   src/gpu/gpu_worker.cpp
+  src/gpu/travel_table_cpu.cpp
+  src/thread_pool.cpp
 )
 target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(delivery_gpu SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/ec2/common)
@@ -151,6 +153,7 @@ function(add_gpu_test name)
 endfunction()
 add_gpu_test(gpu_backend_test)
 add_gpu_test(gpu_worker_test)
+add_gpu_test(travel_table_test)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

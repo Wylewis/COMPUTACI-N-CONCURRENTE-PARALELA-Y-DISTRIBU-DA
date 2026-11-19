@@ -13,6 +13,8 @@
 #include "generator_thread.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_worker.h"
+#include "gpu/travel_table.h"
+#include "gpu/travel_table_graph.h"
 #include "graph.h"
 #include "hardware.h"
 #include "order_book.h"
@@ -32,12 +34,13 @@ struct Options {
     std::string configPath;
     std::string logPath = "events.log";
     bool window = true;
+    bool gpuBackend = false;
     bool bench = false;
     BenchOptions benchOptions;
 };
 
 void printUsage(std::ostream& out) {
-    out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless]\n"
+    out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless] [--backend cpu|gpu]\n"
            "       delivery_sim <config.json> --headless --bench <resultados.csv> [--bench-once] [--bench-reps <n>]\n"
            "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n";
 }
@@ -83,6 +86,12 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
             opts.logPath = argv[++i];
         } else if (arg == "--no-window" || arg == "--headless") {
             opts.window = false;
+        } else if (arg == "--backend") {
+            if (i + 1 >= argc || (std::string(argv[i + 1]) != "cpu" && std::string(argv[i + 1]) != "gpu")) {
+                error = "--backend requiere cpu o gpu";
+                return false;
+            }
+            opts.gpuBackend = std::string(argv[++i]) == "gpu";
         } else if (arg == "--bench") {
             if (i + 1 >= argc) {
                 error = "--bench requiere la ruta del CSV";
@@ -161,10 +170,26 @@ int main(int argc, char** argv) {
             return 1;
         }
         if (opts.bench) return runBenchmarks(opts.benchOptions, config, graph, gpuWorker, gpu.realGpu);
+        if (opts.gpuBackend && !gpu.realGpu) {
+            std::cerr << "delivery_sim: --backend gpu necesita una GPU real; este binario usa la emulacion "
+                         "(compilar con -DUSE_CUDA=ON)\n";
+            return 1;
+        }
 
         ThreadPool estimators(recommendedPoolSize());
         std::cerr << "delivery_sim: pool de estimacion de " << estimators.size() << " hilos (hardware: "
                   << hardwareThreads() << ", rango " << kPoolMinimum << "-" << kPoolMaximum << ")\n";
+
+        const CsrGraph streets = csrFromGraph(graph, config.fleet.speedKmh);
+        const auto tableStart = std::chrono::steady_clock::now();
+        const TravelTable travel(streets.n, opts.gpuBackend
+                                                ? gpuWorker.submit([&streets] { return travelTableGpu(streets); }).get()
+                                                : travelTableCpuParallel(streets, estimators));
+        const auto tableMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - tableStart).count();
+        std::cerr << "delivery_sim: tabla de tiempos de " << travel.size() << " x " << travel.size() << " en "
+                  << tableMs << " ms (" << (opts.gpuBackend ? "GPU, min-plus en mosaicos" : "CPU, Dijkstra multihilo")
+                  << "), " << travel.unreachablePairs() << " pares inalcanzables\n";
 
         SimClock clock(config.simulation.timeScale);
         EventLogger logger(opts.logPath, Fleet::courierIds(config.fleet.couriers));

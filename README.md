@@ -343,6 +343,21 @@ Para compilar con una GPU NVIDIA: `cmake -DUSE_CUDA=ON .. && make`. Todo kernel 
 único hilo dueño de la GPU (`src/gpu/gpu_worker`); los demás hilos le envían trabajo por una cola y
 esperan el resultado por un `future`.
 
+### Aplicaciones de GPU
+
+Cada aplicación tiene su versión de CPU de un hilo, su versión multihilo, su kernel y una prueba
+de que dan el mismo resultado. Con `--backend gpu` el programa usa los kernels; por defecto usa
+las versiones de CPU.
+
+| Aplicación | Concepto del curso | Dónde entra en el programa | Archivos |
+|---|---|---|---|
+| Tabla de tiempos de todos contra todos | 03, mosaicos y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
+
+La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
+intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
+producto de matrices min-plus en mosaicos de 16 por 16 cargados en memoria compartida, elevado al
+cuadrado hasta que deja de cambiar. Los pares sin camino quedan marcados con `kUnreachableMs`.
+
 ### Configuración de ciudad
 
 `config/ciudad.json` es la escala grande para las mediciones de GPU: un rectángulo de unos 5,5 por

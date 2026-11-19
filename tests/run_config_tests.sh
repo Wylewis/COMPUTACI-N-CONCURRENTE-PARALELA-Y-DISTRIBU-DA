@@ -39,7 +39,7 @@ done
 work=$(mktemp -d "${TMPDIR:-/tmp}/delivery_sim_cfg.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 for valid in "$here/config/minimal.json" "$here/../config/equipetrol.json" "$here/../config/urgentes_3_motos.json" \
-             "$here/../config/urgentes_1_moto.json"; do
+             "$here/../config/urgentes_1_moto.json" "$here/../config/ciudad.json"; do
     name=$(basename "$valid")
     python3 - "$valid" "$work/$name" <<'EOF'
 import json, os, sys

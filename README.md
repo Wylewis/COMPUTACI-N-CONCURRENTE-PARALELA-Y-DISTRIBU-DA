@@ -319,6 +319,19 @@ python3 tools/extract_network.py --zone data/equipetrol_zone.json --out data/equ
 python3 tools/make_config.py
 ```
 
+### Configuración de ciudad
+
+`config/ciudad.json` es la escala grande para las mediciones de GPU: un rectángulo de unos 5,5 por
+5,5 km de Santa Cruz de la Sierra, del centro al Cuarto Anillo norte con Equipetrol adentro, con
+4774 intersecciones, 7192 segmentos (4907 de un solo sentido), 200 restaurantes reales de la zona,
+3000 motos y ráfagas de hasta 400 pedidos. La red es fuertemente conexa: todo par de nodos tiene
+camino respetando los sentidos. Se regenera con:
+
+```sh
+python3 tools/make_city.py
+python3 tools/make_map.py --north -17.747 --south -17.798 --west -63.213 --east -63.162 --zoom 15 --out data/ciudad.png
+```
+
 ## Dependencias
 
 - cmake ≥ 3.11

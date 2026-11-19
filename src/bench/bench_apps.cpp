@@ -4,6 +4,11 @@
 #include <string>
 #include <vector>
 
+#include <memory>
+#include <random>
+#include <thread>
+
+#include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -91,11 +96,82 @@ void benchTravelTable(BenchRunner& runner) {
     }
 }
 
+EtaInput randomEtaInput(int nodes, std::size_t orders, std::size_t couriers, unsigned seed) {
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<int> node(0, nodes - 1), time(0, 600'000), percent(0, 99);
+    EtaInput in;
+    in.nowMs = 300'000;
+    for (std::size_t c = 0; c < couriers; ++c) {
+        in.courierNode.push_back(node(rng));
+        in.courierAvailableMs.push_back(time(rng));
+        in.courierFree.push_back(percent(rng) < 85 ? 1 : 0);
+    }
+    for (std::size_t o = 0; o < orders; ++o) {
+        in.orderRestaurantNode.push_back(node(rng));
+        in.orderDeliveryNode.push_back(node(rng));
+        in.orderReadyMs.push_back(time(rng));
+    }
+    return in;
+}
+
+void benchEtaBatch(BenchRunner& runner) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    const TravelTable table(city.n, travelTableCpuParallel(city, builders));
+    std::shared_ptr<EtaBatchGpu> device;
+    const std::vector<std::pair<std::size_t, std::size_t>> sizes{{10, 50}, {50, 200}, {100, 500}, {200, 1000}, {500, 2000}, {1000, 3000}};
+    for (const auto& [orders, couriers] : sizes) {
+        const std::size_t items = orders * couriers;
+        if (!runner.wants(items)) continue;
+        const EtaInput in = randomEtaInput(city.n, orders, couriers, static_cast<unsigned>(items));
+        std::vector<int> expected(items), out(items);
+        etaBatchCpu(table, in, expected.data());
+        BenchCase c;
+        c.app = "eta_batch";
+        c.concept = "04_performance";
+        c.size = std::to_string(orders) + "x" + std::to_string(couriers);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            r.ms = timeMs([&] { etaBatchCpu(table, in, out.data()); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            r.ms = timeMs([&] { etaBatchCpuParallel(table, in, out.data(), pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            r.correct = device->run(in, EtaLayout::StructureOfArrays, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"aos", [&] {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            r.correct = device->run(in, EtaLayout::ArrayOfStructures, &r.times) == expected;
+            return r;
+        }});
+        c.gpuVariants.push_back({"cold", [&] {
+            EtaBatchGpu cold(table);
+            GpuOutcome r;
+            r.correct = cold.run(in, EtaLayout::StructureOfArrays, &r.times) == expected;
+            r.times.totalMs += cold.tableUploadMs();
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 }
 
 std::vector<BenchApp> benchApps() {
     return {
         {"vector_add", "00_reference", benchVectorAdd},
         {"travel_table", "03_memory_tiling", benchTravelTable},
+        {"eta_batch", "04_performance", benchEtaBatch},
     };
 }

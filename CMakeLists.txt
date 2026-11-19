@@ -65,6 +65,7 @@ add_executable(delivery_sim
   src/restaurants.cpp
   src/breakdown.cpp
   src/live_counters.cpp
+  src/eta_service.cpp
   src/bench/bench.cpp
   src/bench/bench_apps.cpp
 )
@@ -76,6 +77,7 @@ target_include_directories(delivery_sim PRIVATE ${CMAKE_SOURCE_DIR}/src)
 set(GPU_SOURCES
   src/gpu/gpu_backend.cu
   src/gpu/travel_table.cu
+  src/gpu/eta_batch.cu
 )
 if(USE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
@@ -94,6 +96,7 @@ add_library(delivery_gpu STATIC ${GPU_SOURCES}
   src/gpu/gpu_worker.cpp
   src/gpu/gpu_kernels.cpp
   src/gpu/travel_table_cpu.cpp
+  src/gpu/eta_batch_cpu.cpp
   src/thread_pool.cpp
 )
 target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
@@ -156,6 +159,11 @@ add_gpu_test(gpu_backend_test)
 add_gpu_test(gpu_worker_test)
 add_gpu_test(travel_table_test)
 add_gpu_test(gpu_occupancy_test)
+add_gpu_test(eta_batch_test)
+add_gpu_test(eta_service_test
+  src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp
+  src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp
+  src/order.cpp src/config.cpp src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -268,24 +276,24 @@ apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
 
 add_executable(breakdown_stress_test tests/breakdown_stress_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(breakdown_stress_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(breakdown_stress_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(breakdown_stress_test PRIVATE -Wall -Wextra)
-target_link_libraries(breakdown_stress_test PRIVATE Threads::Threads)
+target_link_libraries(breakdown_stress_test PRIVATE Threads::Threads delivery_gpu)
 apply_sanitizers(breakdown_stress_test)
 add_test(NAME stress_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_stress_test.sh $<TARGET_FILE:breakdown_stress_test>)
 
 add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(dispatcher_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(dispatcher_thread_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(dispatcher_thread_test PRIVATE -Wall -Wextra)
-target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads)
+target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads delivery_gpu)
 apply_sanitizers(dispatcher_thread_test)
 add_test(NAME dispatcher_thread_test COMMAND dispatcher_thread_test)
 

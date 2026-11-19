@@ -9,11 +9,15 @@
 #include "config.h"
 #include "event_logger.h"
 #include "fleet.h"
+#include "gpu/eta_batch.h"
+#include "gpu/travel_table.h"
 #include "graph.h"
 #include "order_book.h"
 #include "sim_clock.h"
 #include "stop_signal.h"
 #include "thread_pool.h"
+
+class EtaService;
 
 class DispatcherThread {
 public:
@@ -27,6 +31,8 @@ public:
     void start();
     void join();
 
+    void useTravelTable(const TravelTable* table, EtaService* service);
+
     std::int64_t assigned() const { return assigned_.load(std::memory_order_acquire); }
     std::int64_t retries() const { return retries_.load(std::memory_order_acquire); }
     std::int64_t waits() const { return waits_.load(std::memory_order_acquire); }
@@ -38,6 +44,7 @@ private:
     void rejectExpired();
     enum class Outcome { Assigned, NoCourier, Stopped };
     Outcome dispatch(Order& order);
+    Outcome dispatchWithTable(Order& order);
 
     const RestaurantConfig restaurant_;
     OrderBook& book_;
@@ -47,6 +54,8 @@ private:
     const std::chrono::milliseconds quoteTimeout_;
     const std::string estimator_;
     ThreadPool& estimators_;
+    const TravelTable* table_ = nullptr;
+    EtaService* etaService_ = nullptr;
     EventLogger& logger_;
     const SimClock& clock_;
     StopSignal& stop_;

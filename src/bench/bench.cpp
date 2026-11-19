@@ -40,6 +40,8 @@ void BenchRunner::run(const BenchCase& c) {
         if (c.cpuN)
             for (unsigned t : threadCounts_) c.cpuN(poolOf(t));
         if (withGpu) (void)gpuWorker_.submit(c.gpu).get();
+        if (realGpu_)
+            for (const auto& variant : c.gpuVariants) (void)gpuWorker_.submit(variant.second).get();
     }
     const int reps = options_.once ? 1 : std::max(1, options_.reps);
     for (int rep = 0; rep < reps; ++rep) {
@@ -57,6 +59,13 @@ void BenchRunner::run(const BenchCase& c) {
             const GpuOutcome r = gpuWorker_.submit(c.gpu).get();
             row(c, "gpu_kernel", 0, rep, r.times.kernelMs, r.correct);
             row(c, "gpu_e2e", 0, rep, r.times.totalMs, r.correct);
+        }
+        if (realGpu_) {
+            for (const auto& variant : c.gpuVariants) {
+                const GpuOutcome r = gpuWorker_.submit(variant.second).get();
+                row(c, "gpu_kernel_" + variant.first, 0, rep, r.times.kernelMs, r.correct);
+                row(c, "gpu_e2e_" + variant.first, 0, rep, r.times.totalMs, r.correct);
+            }
         }
     }
     csv_.flush();

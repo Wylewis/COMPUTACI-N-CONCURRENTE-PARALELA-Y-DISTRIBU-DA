@@ -7,6 +7,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "config.h"
@@ -43,6 +44,7 @@ struct BenchCase {
     std::function<Timed()> cpu1;
     std::function<Timed(ThreadPool&)> cpuN;
     std::function<GpuOutcome()> gpu;
+    std::vector<std::pair<std::string, std::function<GpuOutcome()>>> gpuVariants;
 };
 
 class BenchRunner {

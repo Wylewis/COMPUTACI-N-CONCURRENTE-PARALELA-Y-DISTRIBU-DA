@@ -8,9 +8,11 @@
 #include "config.h"
 #include "dispatcher_thread.h"
 #include "distance_table_parallel.h"
+#include "eta_service.h"
 #include "event_logger.h"
 #include "fleet.h"
 #include "generator_thread.h"
+#include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
@@ -37,12 +39,14 @@ struct Options {
     bool window = true;
     bool gpuBackend = false;
     bool gpuInfo = false;
+    std::string estimator;
     bool bench = false;
     BenchOptions benchOptions;
 };
 
 void printUsage(std::ostream& out) {
     out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless] [--backend cpu|gpu]\n"
+           "                    [--estimator serial|async|pool|table|gpu]\n"
            "       delivery_sim <config.json> --gpu-info\n"
            "       delivery_sim <config.json> --headless --bench <resultados.csv> [--bench-once] [--bench-reps <n>]\n"
            "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n";
@@ -89,6 +93,12 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
             opts.logPath = argv[++i];
         } else if (arg == "--no-window" || arg == "--headless") {
             opts.window = false;
+        } else if (arg == "--estimator") {
+            if (i + 1 >= argc) {
+                error = "--estimator requiere serial, async, pool, table o gpu";
+                return false;
+            }
+            opts.estimator = argv[++i];
         } else if (arg == "--gpu-info") {
             opts.gpuInfo = true;
         } else if (arg == "--backend") {
@@ -146,6 +156,8 @@ int main(int argc, char** argv) {
     Config config;
     try {
         config = loadConfig(opts.configPath);
+        if (!opts.estimator.empty()) config.dispatch.estimator = opts.estimator;
+        if (opts.gpuBackend && opts.estimator.empty()) config.dispatch.estimator = "gpu";
         validateConfig(config);
     } catch (const ConfigError& e) {
         std::cerr << "delivery_sim: configuracion invalida: " << e.what() << "\n";
@@ -193,9 +205,9 @@ int main(int argc, char** argv) {
             return 0;
         }
         if (opts.bench) return runBenchmarks(opts.benchOptions, config, graph, gpuWorker, gpu.realGpu);
-        if (opts.gpuBackend && !gpu.realGpu) {
-            std::cerr << "delivery_sim: --backend gpu necesita una GPU real; este binario usa la emulacion "
-                         "(compilar con -DUSE_CUDA=ON)\n";
+        if ((opts.gpuBackend || config.dispatch.estimator == "gpu") && !gpu.realGpu) {
+            std::cerr << "delivery_sim: el backend y el estimador gpu necesitan una GPU real; este binario usa la "
+                         "emulacion (compilar con -DUSE_CUDA=ON)\n";
             return 1;
         }
 
@@ -213,6 +225,13 @@ int main(int argc, char** argv) {
         std::cerr << "delivery_sim: tabla de tiempos de " << travel.size() << " x " << travel.size() << " en "
                   << tableMs << " ms (" << (opts.gpuBackend ? "GPU, min-plus en mosaicos" : "CPU, Dijkstra multihilo")
                   << "), " << travel.unreachablePairs() << " pares inalcanzables\n";
+        std::unique_ptr<EtaBatchGpu> etaDevice;
+        if (config.dispatch.estimator == "gpu") {
+            etaDevice = gpuWorker.submit([&travel] { return std::make_unique<EtaBatchGpu>(travel); }).get();
+            std::cerr << "delivery_sim: tabla de tiempos residente en la GPU, " << etaDevice->tableBytes() / (1024 * 1024)
+                      << " MiB subidos en " << etaDevice->tableUploadMs() << " ms\n";
+        }
+        std::cerr << "delivery_sim: estimador " << config.dispatch.estimator << "\n";
 
         SimClock clock(config.simulation.timeScale);
         EventLogger logger(opts.logPath, Fleet::courierIds(config.fleet.couriers));
@@ -225,10 +244,13 @@ int main(int argc, char** argv) {
         Fleet fleet(config.fleet, graph, restaurants, logger, clock, stop);
         fleet.enableBreakdowns(config.incidents, config.orders.seed, [&book](Order o) { book.putBack(std::move(o)); });
         book.onSubmitted([&fleet] { fleet.notifyChange(); });
+        std::unique_ptr<EtaService> etaService;
+        if (etaDevice) etaService = std::make_unique<EtaService>(fleet, graph, clock, gpuWorker, *etaDevice);
         std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
         for (const RestaurantConfig& r : config.restaurants) {
             dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,
                                                                      config.dispatch, estimators, logger, clock, stop));
+            dispatchers.back()->useTravelTable(&travel, etaService.get());
         }
 
         clock.start();
@@ -272,6 +294,12 @@ int main(int argc, char** argv) {
         logger.publish(Event::simulationStopping(clock.nowMs()));
         book.close();
         for (auto& d : dispatchers) d->join();
+        if (etaService) {
+            etaService->stop();
+            std::cerr << "delivery_sim: rondas de estimacion en GPU: " << etaService->rounds() << ", pedidos estimados: "
+                      << etaService->requests() << ", ronda mas grande: " << etaService->largestRound() << " pedidos\n";
+        }
+        if (etaDevice) gpuWorker.submit([&etaDevice] { etaDevice.reset(); }).get();
         fleet.join();
         const std::vector<Order> unfinished = book.drain();
         std::size_t inBags = 0;

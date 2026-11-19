@@ -50,10 +50,34 @@ GOOD = [
     ev(10000, "simulationStopping"),
 ]
 GOOD_SUMMARY = {"created": 4, "delivered": 1, "rejected": 1, "pending": 2, "reassigned": 1, "breakdowns": 1,
-                "avgDeliveryMs": 8000, "maxDeliveryMs": 8000, "deliveredPerCourier": {"c0": 1, "c1": 0}}
+                "avgDeliveryMs": 8000, "maxDeliveryMs": 8000, "deliveredPerCourier": {"c0": 1, "c1": 0},
+                "urgentCreated": 0, "urgentDelivered": 0, "avgUrgentDeliveryMs": 0}
 
 expect("log correcto sin resumen", GOOD, None, config=CONFIG)
 expect("log correcto con resumen", GOOD, None, GOOD_SUMMARY, CONFIG)
+
+# Urgentes: el campo es opcional, se cuenta aparte y el resumen debe coincidir
+URGENT = [
+    ev(0, "orderCreated", order="u", restaurant="r0", urgent=True),
+    ev(0, "orderCreated", order="n", restaurant="r0", urgent=False),
+    ev(0, "orderCreated", order="m", restaurant="r0"),
+    ev(1, "orderAssigned", order="u", courier="c0"),
+    ev(2, "pickupStarted", order="u", courier="c0", restaurant="r0"),
+    ev(3, "orderPickedUp", order="u", courier="c0", restaurant="r0"),
+    ev(4000, "orderDelivered", order="u", courier="c0"),
+    ev(5000, "simulationStopping"),
+]
+URGENT_SUMMARY = {"created": 3, "delivered": 1, "rejected": 0, "pending": 2, "reassigned": 0, "breakdowns": 0,
+                  "avgDeliveryMs": 4000, "maxDeliveryMs": 4000, "deliveredPerCourier": {"c0": 1},
+                  "urgentCreated": 1, "urgentDelivered": 1, "avgUrgentDeliveryMs": 4000}
+expect("log con urgentes y resumen correcto", URGENT, None, URGENT_SUMMARY, CONFIG)
+expect("urgent ausente vale false", URGENT, None, URGENT_SUMMARY, CONFIG)
+expect("urgent que no es booleano", [ev(0, "orderCreated", order="x", restaurant="r0", urgent="si")] + GOOD,
+       "'urgent' debe ser true o false")
+expect("resumen con urgentDelivered mal", URGENT, "urgentDelivered = 0", dict(URGENT_SUMMARY, urgentDelivered=0), CONFIG)
+expect("resumen con avgUrgentDeliveryMs mal", URGENT, "avgUrgentDeliveryMs = 1", dict(URGENT_SUMMARY, avgUrgentDeliveryMs=1), CONFIG)
+expect("resumen sin los campos de urgentes", URGENT, "urgentCreated = None",
+       {k: v for k, v in URGENT_SUMMARY.items() if not k.startswith(("urgent", "avgUrgent"))}, CONFIG)
 
 # Liberacion por averia: los no recogidos salen de la mochila de la averiada
 RELEASE = [

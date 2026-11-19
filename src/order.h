@@ -39,6 +39,7 @@ struct Order {
     std::string deliveryNode;
     std::int64_t createdAtMs = 0;
     std::int64_t readyAtMs = 0;
+    bool urgent = false;
 
     OrderState state = OrderState::Created;
     std::string courierId;

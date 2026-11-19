@@ -108,6 +108,7 @@ int main(int argc, char** argv) {
         Restaurants restaurants(config.restaurants);
         Fleet fleet(config.fleet, graph, restaurants, logger, clock, stop);
         fleet.enableBreakdowns(config.incidents, config.orders.seed, [&book](Order o) { book.putBack(std::move(o)); });
+        book.onSubmitted([&fleet] { fleet.notifyChange(); });
         std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
         for (const RestaurantConfig& r : config.restaurants) {
             dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,

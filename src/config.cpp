@@ -171,6 +171,9 @@ Config loadConfig(const std::string& path) {
         cfg.orders.burstMax = field<int>(orders, "orders", "burstMax");
         cfg.orders.maxPending = field<int>(orders, "orders", "maxPending");
         cfg.orders.seed = field<std::uint64_t>(orders, "orders", "seed");
+        if (orders.contains("urgentProbability"))
+            cfg.orders.urgentProbability = field<double>(orders, "orders", "urgentProbability");
+        if (orders.contains("agingMs")) cfg.orders.agingMs = field<std::int64_t>(orders, "orders", "agingMs");
     }
 
     {
@@ -245,6 +248,13 @@ void validateConfig(const Config& cfg) {
     const double p = cfg.incidents.breakdownProbability;
     if (!(p >= 0.0 && p <= 1.0)) {
         throw ConfigError("'incidents.breakdownProbability' debe estar entre 0 y 1");
+    }
+    const double u = cfg.orders.urgentProbability;
+    if (!(u >= 0.0 && u <= 1.0)) {
+        throw ConfigError("'orders.urgentProbability' debe estar entre 0 y 1");
+    }
+    if (cfg.orders.agingMs < 0) {
+        throw ConfigError("'orders.agingMs' debe ser un entero >= 0");
     }
 
     std::ifstream image(cfg.imagePath(), std::ios::binary);

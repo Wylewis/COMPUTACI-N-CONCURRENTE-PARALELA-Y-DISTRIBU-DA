@@ -82,6 +82,14 @@ std::uint64_t Fleet::version() const {
     return version_;
 }
 
+void Fleet::notifyChange() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++version_;
+    }
+    cv_.notify_all();
+}
+
 void Fleet::waitForChange(std::uint64_t seen) {
     std::unique_lock<std::mutex> lock(mutex_);
     cv_.wait(lock, [&] { return version_ != seen || stop_.requested(); });

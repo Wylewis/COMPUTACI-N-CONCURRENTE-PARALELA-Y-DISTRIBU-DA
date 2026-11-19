@@ -27,9 +27,11 @@ hara el programa de los evaluadores:
     repartidores recogiendo (entre pickupStarted y orderPickedUp) que
     pickupSlots;
   - despues de simulationStopping no se crean pedidos;
+  - orderCreated puede llevar `urgent` (true/false); si falta vale false;
   - con --summary: created, delivered, rejected, pending, reassigned,
-    breakdowns, deliveredPerCourier, avgDeliveryMs y maxDeliveryMs coinciden
-    con las lineas del log.
+    breakdowns, deliveredPerCourier, avgDeliveryMs, maxDeliveryMs,
+    urgentCreated, urgentDelivered y avgUrgentDeliveryMs coinciden con las
+    lineas del log.
 
 El orden de llegada a los restaurantes no se puede verificar solo con el log,
 porque no existe un evento de llegada a la fila; queda fuera.
@@ -54,6 +56,7 @@ EVENTS = {
     "orderReassigned": {"order", "from", "to"},
     "simulationStopping": set(),
 }
+OPTIONAL = {"orderCreated": {"urgent"}}
 REASONS = {"queueFull", "unreachable", "noCourier"}
 FINAL = {"delivered", "rejected"}
 
@@ -79,6 +82,8 @@ def check(lines, summary=None, config=None):
     counts = defaultdict(int)
     per_courier = defaultdict(int)
     delivery_times = []
+    urgent = set()
+    urgent_times = []
     stopping_seen = False
     prev_global_t = None
     global_backwards = 0
@@ -107,13 +112,16 @@ def check(lines, summary=None, config=None):
             continue
         expected = EVENTS[kind] | {"t", "event"}
         keys = set(e)
-        if keys != expected:
-            missing = expected - keys
-            extra = keys - expected
+        missing = expected - keys
+        extra = keys - expected - OPTIONAL.get(kind, set())
+        if missing or extra:
             if missing:
                 err(lineno, f"{kind}: faltan propiedades {sorted(missing)}")
             if extra:
                 err(lineno, f"{kind}: propiedades de mas {sorted(extra)}")
+            continue
+        if "urgent" in e and not isinstance(e["urgent"], bool):
+            err(lineno, f"{kind}: 'urgent' debe ser true o false, es {e['urgent']!r}")
             continue
 
         counts[kind] += 1
@@ -148,6 +156,8 @@ def check(lines, summary=None, config=None):
             created_at[order] = t
             restaurant_of[order] = e["restaurant"]
             last_t[order] = t
+            if e.get("urgent", False):
+                urgent.add(order)
             continue
 
         if order not in state:
@@ -222,6 +232,8 @@ def check(lines, summary=None, config=None):
             state[order] = "delivered"
             per_courier[c] += 1
             delivery_times.append(t - created_at[order])
+            if order in urgent:
+                urgent_times.append(t - created_at[order])
 
         elif kind == "orderReassigned":
             if current not in ("assigned", "collecting", "pickedUp", "released"):
@@ -256,6 +268,9 @@ def check(lines, summary=None, config=None):
         "avgDeliveryMs": round(sum(delivery_times) / len(delivery_times)) if delivery_times else 0,
         "maxDeliveryMs": max(delivery_times) if delivery_times else 0,
         "deliveredPerCourier": dict(per_courier),
+        "urgentCreated": len(urgent),
+        "urgentDelivered": len(urgent_times),
+        "avgUrgentDeliveryMs": round(sum(urgent_times) / len(urgent_times)) if urgent_times else 0,
     }
     if counts["simulationStopping"] != 1:
         errors.append(f"resumen: simulationStopping aparece {counts['simulationStopping']} veces, se esperaba 1")
@@ -263,10 +278,11 @@ def check(lines, summary=None, config=None):
         errors.append("resumen: created != delivered + rejected + pending en el log")
 
     if summary is not None:
-        for key in ("created", "delivered", "rejected", "pending", "reassigned", "breakdowns"):
+        for key in ("created", "delivered", "rejected", "pending", "reassigned", "breakdowns",
+                    "urgentCreated", "urgentDelivered"):
             if summary.get(key) != stats[key]:
                 errors.append(f"resumen: {key} = {summary.get(key)!r}, el log tiene {stats[key]}")
-        for key in ("avgDeliveryMs", "maxDeliveryMs"):
+        for key in ("avgDeliveryMs", "maxDeliveryMs", "avgUrgentDeliveryMs"):
             value = summary.get(key)
             if not isinstance(value, (int, float)) or abs(value - stats[key]) > 1:
                 errors.append(f"resumen: {key} = {value!r}, el log da {stats[key]}")

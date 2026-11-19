@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "order.h"
@@ -21,8 +22,10 @@ struct Event {
     std::optional<std::string> from;
     std::optional<std::string> to;
     std::optional<RejectReason> reason;
+    std::optional<bool> urgent;
 
-    static Event orderCreated(std::int64_t t, const std::string& order, const std::string& restaurant);
+    static Event orderCreated(std::int64_t t, const std::string& order, const std::string& restaurant,
+                              bool urgent = false);
     static Event orderAssigned(std::int64_t t, const std::string& order, const std::string& courier);
     static Event pickupStarted(std::int64_t t, const std::string& order, const std::string& courier,
                                const std::string& restaurant);
@@ -48,6 +51,9 @@ struct Summary {
     std::int64_t avgDeliveryMs = 0;
     std::int64_t maxDeliveryMs = 0;
     std::map<std::string, std::int64_t> deliveredPerCourier;
+    std::int64_t urgentCreated = 0;
+    std::int64_t urgentDelivered = 0;
+    std::int64_t avgUrgentDeliveryMs = 0;
 
     std::string toJsonLine() const;
 };
@@ -77,6 +83,8 @@ private:
 
     Summary summary_;
     std::int64_t deliveredTotalMs_ = 0;
+    std::int64_t urgentTotalMs_ = 0;
+    std::unordered_set<std::string> urgent_;
     std::unordered_map<std::string, std::int64_t> createdAt_;
     std::unordered_map<std::string, std::int64_t> lastT_;
 };

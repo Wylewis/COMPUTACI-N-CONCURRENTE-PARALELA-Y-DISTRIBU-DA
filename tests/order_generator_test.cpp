@@ -116,6 +116,37 @@ int main(int argc, char** argv) {
     }
 
     {
+        Config u = smallCity(7, 4);
+        u.orders.urgentProbability = 0.3;
+        OrderGenerator a(u, g), b(u, g);
+        bool same = true;
+        int urgents = 0, total = 0;
+        for (int i = 0; i < 300; ++i) {
+            const OrderBatch x = a.next(), y = b.next();
+            same = same && x.orders.size() == y.orders.size();
+            for (std::size_t k = 0; same && k < x.orders.size(); ++k) {
+                same = x.orders[k].urgent == y.orders[k].urgent && x.orders[k].id == y.orders[k].id;
+                if (x.orders[k].urgent) ++urgents;
+                ++total;
+            }
+        }
+        check(same, "la misma semilla marca urgentes los mismos pedidos");
+        check(urgents > total / 5 && urgents < total / 2, "con 0.3 hay urgentes, pero no todos");
+        OrderGenerator none(cfg, g);
+        bool anyUrgent = false;
+        for (int i = 0; i < 100; ++i)
+            for (const Order& o : none.next().orders) anyUrgent = anyUrgent || o.urgent;
+        check(!anyUrgent, "con probabilidad 0 ningun pedido es urgente");
+        Config all = smallCity(7, 4);
+        all.orders.urgentProbability = 1.0;
+        OrderGenerator every(all, g);
+        bool allUrgent = true;
+        for (int i = 0; i < 100; ++i)
+            for (const Order& o : every.next().orders) allUrgent = allUrgent && o.urgent;
+        check(allUrgent, "con probabilidad 1 todos son urgentes");
+    }
+
+    {
         const Config one = smallCity(3, 1);
         OrderGenerator gen(one, g);
         bool allSingle = true;

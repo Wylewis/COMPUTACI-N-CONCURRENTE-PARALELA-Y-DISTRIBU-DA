@@ -9,8 +9,7 @@ DispatcherThread::DispatcherThread(const RestaurantConfig& restaurant, OrderBook
                                    const Graph& graph, double speedKmh, const DispatchConfig& dispatch,
                                    ThreadPool& estimators, EventLogger& logger, const SimClock& clock, StopSignal& stop)
     : restaurant_(restaurant), book_(book), fleet_(fleet), graph_(graph), speedKmh_(speedKmh),
-      acceptTimeoutMs_(dispatch.acceptTimeoutMs), quoteTimeout_(dispatch.quoteTimeoutMs), estimator_(dispatch.estimator),
-      estimators_(estimators),
+      quoteTimeout_(dispatch.quoteTimeoutMs), estimator_(dispatch.estimator), estimators_(estimators),
       logger_(logger), clock_(clock), stop_(stop) {}
 
 DispatcherThread::~DispatcherThread() { join(); }
@@ -24,21 +23,34 @@ void DispatcherThread::join() {
 
 void DispatcherThread::run() {
     while (!stop_.requested()) {
-        std::optional<Order> order = book_.take(restaurant_.id);
+        rejectExpired();
+        std::optional<Order> order = book_.take(restaurant_.id, clock_.nowMs());
         if (!order) return;
-        if (dispatch(*order) == Outcome::Stopped) {
-            book_.putBack(std::move(*order));
-            return;
-        }
+        const std::uint64_t seen = fleet_.version();
+        const Outcome outcome = dispatch(*order);
+        if (outcome == Outcome::Assigned) continue;
+        book_.putBack(std::move(*order));
+        if (outcome == Outcome::Stopped) return;
+        waits_.fetch_add(1, std::memory_order_acq_rel);
+        if (const auto wake = book_.nextWakeMs(restaurant_.id, clock_.nowMs()))
+            fleet_.waitForChange(seen, clock_.realTimeFor(*wake));
+        else
+            fleet_.waitForChange(seen);
+    }
+}
+
+void DispatcherThread::rejectExpired() {
+    const std::int64_t now = clock_.nowMs();
+    std::vector<Order> expired = book_.takeExpired(restaurant_.id, now);
+    for (Order& o : expired) {
+        o.reject(RejectReason::NoCourier);
+        logger_.publish(Event::orderRejected(now, o.id, RejectReason::NoCourier));
+        rejected_.fetch_add(1, std::memory_order_acq_rel);
     }
 }
 
 DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
-
-    const bool wasAssigned = !order.courierId.empty();
-    const std::int64_t deadlineMs = order.createdAtMs + acceptTimeoutMs_;
     while (!stop_.requested()) {
-        const std::uint64_t seen = fleet_.version();
         const std::int64_t now = clock_.nowMs();
 
         auto copy = std::make_shared<Order>();
@@ -61,23 +73,12 @@ DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
                 return r.estimates;
             };
         const auto sel = selectCourier(fleet_.snapshots(now), order, restaurant_, graph_, speedKmh_, now, kFirstRadiusM, mapper);
-        if (sel) {
-            if (fleet_.assign(sel->estimate.courierId, order)) {
-                assigned_.fetch_add(1, std::memory_order_acq_rel);
-                return Outcome::Assigned;
-            }
-            retries_.fetch_add(1, std::memory_order_acq_rel);
-            continue;
+        if (!sel) return Outcome::NoCourier;
+        if (fleet_.assign(sel->estimate.courierId, order)) {
+            assigned_.fetch_add(1, std::memory_order_acq_rel);
+            return Outcome::Assigned;
         }
-        if (!wasAssigned && now >= deadlineMs) {
-            order.reject(RejectReason::NoCourier);
-            logger_.publish(Event::orderRejected(now, order.id, RejectReason::NoCourier));
-            rejected_.fetch_add(1, std::memory_order_acq_rel);
-            return Outcome::Rejected;
-        }
-        waits_.fetch_add(1, std::memory_order_acq_rel);
-        if (wasAssigned) fleet_.waitForChange(seen);
-        else fleet_.waitForChange(seen, clock_.realTimeFor(deadlineMs));
+        retries_.fetch_add(1, std::memory_order_acq_rel);
     }
     return Outcome::Stopped;
 }

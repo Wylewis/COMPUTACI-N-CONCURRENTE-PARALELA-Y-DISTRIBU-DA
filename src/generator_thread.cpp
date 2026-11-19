@@ -31,17 +31,18 @@ void GeneratorThread::run() {
         struct Created {
             std::string id;
             std::string restaurant;
+            bool urgent;
         };
         std::vector<Created> created;
         created.reserve(batch.orders.size());
-        for (const Order& o : batch.orders) created.push_back({o.id, o.restaurantId});
-
-        const SubmitOutcome outcome = book_.submit(std::move(batch));
+        for (const Order& o : batch.orders) created.push_back({o.id, o.restaurantId, o.urgent});
 
         for (const Created& c : created) {
-            logger_.publish(Event::orderCreated(clock_.nowMs(), c.id, c.restaurant));
+            logger_.publish(Event::orderCreated(clock_.nowMs(), c.id, c.restaurant, c.urgent));
         }
         created_.fetch_add(static_cast<std::int64_t>(created.size()), std::memory_order_acq_rel);
+
+        const SubmitOutcome outcome = book_.submit(std::move(batch));
         for (const Order& o : outcome.rejected) {
             logger_.publish(Event::orderRejected(clock_.nowMs(), o.id, *o.rejectReason));
         }

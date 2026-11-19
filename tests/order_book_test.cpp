@@ -100,7 +100,7 @@ int main() {
         check(unreachable == 1 && full == 2, "1 unreachable (venia asi) y 2 queueFull");
         check(book.pending() == 3, "pending es 3");
 
-        auto taken = book.take("r0");
+        auto taken = book.take("r0", 0);
         check(taken.has_value(), "take devuelve el pedido de r0");
         std::vector<Order> one;
         one.push_back(make("z", "r2"));
@@ -114,12 +114,12 @@ int main() {
         b.push_back(make("2", "r0"));
         b.push_back(make("3", "r0"));
         book.submit(batchOf(std::move(b)));
-        auto first = book.take("r0");
+        auto first = book.take("r0", 0);
         check(first && first->id == "1", "take saca el mas antiguo");
         book.putBack(std::move(*first));
-        auto again = book.take("r0");
-        check(again && again->id == "1", "putBack vuelve al frente");
-        check(book.take("r0")->id == "2" && book.take("r0")->id == "3", "el resto sigue en orden");
+        auto again = book.take("r0", 0);
+        check(again && again->id == "1", "putBack lo deja disponible y sigue siendo el primero");
+        check(book.take("r0", 0)->id == "2" && book.take("r0", 0)->id == "3", "el resto sigue en orden");
     }
 
     {
@@ -128,9 +128,9 @@ int main() {
         std::vector<std::thread> dispatchers;
         for (const std::string rid : {"r0", "r1", "r2"}) {
             dispatchers.emplace_back([&, rid] {
-                auto o = book.take(rid);
+                auto o = book.take(rid, 0);
                 if (o) got.fetch_add(1); else empty.fetch_add(1);
-                auto o2 = book.take(rid);
+                auto o2 = book.take(rid, 0);
                 if (o2) got.fetch_add(1); else empty.fetch_add(1);
             });
         }
@@ -155,6 +155,55 @@ int main() {
     }
 
     {
+        Config cfg = cityWith(50);
+        cfg.orders.agingMs = 300'000;
+        cfg.dispatch.acceptTimeoutMs = 600'000;
+        OrderBook book(cfg);
+        auto at = [](const std::string& id, std::int64_t created, bool urgent) {
+            Order o = make(id, "r0");
+            o.createdAtMs = created;
+            o.urgent = urgent;
+            return o;
+        };
+        std::vector<Order> b;
+        b.push_back(at("o1", 0, false));
+        b.push_back(at("o2", 10'000, true));
+        b.push_back(at("o3", 20'000, false));
+        b.push_back(at("o4", 5'000, true));
+        book.submit(batchOf(std::move(b)));
+        check(book.nextWakeMs("r0", 0) == 300'000, "el proximo plazo es el envejecimiento del normal mas viejo");
+        auto first = book.take("r0", 30'000);
+        check(first && first->id == "o4", "sale el urgente mas antiguo aunque entro despues");
+        auto second = book.take("r0", 30'000);
+        check(second && second->id == "o2", "despues el otro urgente");
+        book.putBack(std::move(*first));
+        book.putBack(std::move(*second));
+        auto aged = book.take("r0", 300'000);
+        check(aged && aged->id == "o1", "un normal envejecido pasa delante de los urgentes mas viejos");
+        book.putBack(std::move(*aged));
+        check(book.nextWakeMs("r0", 300'000) == 320'000, "ya envejecido o1, el proximo plazo es el envejecimiento de o3");
+        auto expired = book.takeExpired("r0", 600'000);
+        check(expired.size() == 1 && expired[0].id == "o1" && book.pending() == 3, "a los 600 s vence solo o1");
+        Order back = at("o9", 0, false);
+        back.courierId = "c0";
+        book.putBack(std::move(back));
+        check(book.takeExpired("r0", 900'000).size() == 3 && book.pending() == 1,
+              "los que ya tuvieron moto no vencen nunca");
+        check(!book.nextWakeMs("r0", 900'000), "sin plazos pendientes no hay instante de despertar");
+    }
+
+    {
+        OrderBook book(cityWith(50));
+        std::vector<Order> b;
+        b.push_back(make("o9", "r0"));
+        b.push_back(make("o10", "r0"));
+        b.push_back(make("o2", "r0"));
+        book.submit(batchOf(std::move(b)));
+        check(book.take("r0", 0)->id == "o2" && book.take("r0", 0)->id == "o9" && book.take("r0", 0)->id == "o10",
+              "a igual instante desempata la parte numerica del id");
+    }
+
+    {
         OrderBook book(cityWith(50));
         std::vector<Order> b;
         for (int i = 0; i < 7; ++i) b.push_back(make("o" + std::to_string(i), "r" + std::to_string(i % 3)));
@@ -166,7 +215,7 @@ int main() {
     {
         OrderBook book(cityWith(50));
         bool threw = false;
-        try { book.take("r9"); } catch (const std::out_of_range&) { threw = true; }
+        try { book.take("r9", 0); } catch (const std::out_of_range&) { threw = true; }
         check(threw, "take de un restaurante desconocido lanza");
     }
 
@@ -176,7 +225,7 @@ int main() {
         std::vector<std::thread> consumers;
         for (const std::string rid : {"r0", "r1", "r2"}) {
             consumers.emplace_back([&, rid] {
-                while (book.take(rid)) taken.fetch_add(1);
+                while (book.take(rid, 0)) taken.fetch_add(1);
             });
         }
         std::vector<std::thread> producers;

@@ -19,6 +19,7 @@
 #include "generator_thread.h"
 #include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
+#include "gpu/delivery_kpis.h"
 #include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
@@ -488,6 +489,15 @@ int main(int argc, char** argv) {
                       << ", p90 en el " << histogramPercentileBin(perMinute, 0.9) << ", p99 en el "
                       << histogramPercentileBin(perMinute, 0.99) << "; minuto mas cargado: " << busiest << " con "
                       << perMinute[busiest] << " entregas\n";
+            const DeliveryKpis kpis = opts.gpuBackend ? gpuWorker.submit([&deliveryMs] {
+                                                                     return deliveryKpisGpu(deliveryMs.data(), deliveryMs.size());
+                                                                 }).get()
+                                                      : deliveryKpisCpu(deliveryMs.data(), deliveryMs.size());
+            const long long count = static_cast<long long>(deliveryMs.size());
+            std::cerr << "delivery_sim: indicadores de entrega (" << (opts.gpuBackend ? "GPU" : "CPU") << "): promedio de "
+                      << (kpis.sumMs + count / 2) / count << " ms, la mas lenta tardo " << kpis.maxMs << " ms y "
+                      << kpis.late << " de " << count << " pasaron de " << kLateDeliveryMs / 60'000 << " minutos ("
+                      << 100 * static_cast<long long>(kpis.late) / count << " %)\n";
         }
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;

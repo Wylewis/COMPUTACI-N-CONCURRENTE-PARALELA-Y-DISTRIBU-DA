@@ -13,6 +13,7 @@
 #include "gpu/argmin_rows.h"
 #include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
+#include "gpu/delivery_kpis.h"
 #include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
@@ -460,6 +461,46 @@ void benchDeliveryHistogram(BenchRunner& runner) {
     }
 }
 
+void benchDeliveryKpis(BenchRunner& runner) {
+    for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
+        if (!runner.wants(n)) continue;
+        std::mt19937 rng(static_cast<unsigned>(n) + 8u);
+        std::vector<int> ms(n);
+        for (int& v : ms) v = 600'000 + static_cast<int>(rng() % 900'000u + rng() % 900'000u + rng() % 900'000u);
+        const DeliveryKpis expected = deliveryKpisCpu(ms.data(), n);
+        BenchCase c;
+        c.app = "delivery_kpis";
+        c.concept = "08_reduction";
+        c.size = std::to_string(n);
+        c.items = n;
+        c.cpu1 = [&] {
+            Timed r;
+            DeliveryKpis out = noDeliveries();
+            r.ms = timeMs([&] { out = deliveryKpisCpu(ms.data(), n); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            DeliveryKpis out = noDeliveries();
+            r.ms = timeMs([&] { out = deliveryKpisCpuParallel(ms.data(), n, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = deliveryKpisGpu(ms.data(), n, kLateDeliveryMs, kKpiPerThread, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"fine", [&] {
+            GpuOutcome r;
+            r.correct = deliveryKpisGpu(ms.data(), n, kLateDeliveryMs, 1, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 void benchDemandHeatmap(BenchRunner& runner) {
     const std::vector<float> weights = gaussianWeights();
     for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
@@ -573,5 +614,6 @@ std::vector<BenchApp> benchApps() {
         {"delivery_histogram", "07_histogram", benchDeliveryHistogram},
         {"demand_heatmap", "05_conv", benchDemandHeatmap},
         {"coverage_field", "06_stencil", benchCoverageField},
+        {"delivery_kpis", "08_reduction", benchDeliveryKpis},
     };
 }

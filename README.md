@@ -376,6 +376,7 @@ las versiones de CPU.
 | Histograma de tiempos de entrega | 07, histograma | El resumen final de la simulación | `src/gpu/delivery_histogram.*` |
 | Mapa de calor de demanda | 05, convolución | Una capa sobre el mapa en la ventana (tecla `h`) y el resumen final | `src/gpu/demand_heatmap.*` |
 | Campo de cobertura de las motos libres | 06, stencil | Otra capa sobre el mapa en la ventana (tecla `c`) y el resumen final | `src/gpu/coverage_field.*` |
+| Indicadores de entrega | 08, reducción | El resumen final de la simulación | `src/gpu/delivery_kpis.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -427,6 +428,13 @@ tile de 16 por 16 en shared memory y calcula las 14 por 14 celdas de adentro. La
 revisa cada 16 pasadas con una reducción que cuenta los bloques que cambiaron. En la ventana, la
 tecla `c` muestra u oculta la capa, de verde (cerca) a rojo (lejos); al terminar, el programa
 informa la zona peor cubierta.
+
+Los indicadores de entrega resumen los tiempos de entrega en tres números que se calculan juntos:
+la suma, de donde sale el promedio, el máximo y cuántas entregas pasaron de 45 minutos. En GPU
+cada hilo reduce primero 64 entregas en sus registros, el bloque combina los 256 parciales con un
+árbol en shared memory, y un segundo kernel reduce los parciales de los bloques hasta que queda
+uno. Son enteros, así que la tarjeta y la CPU dan exactamente lo mismo. Al terminar, el programa
+imprime el promedio, la entrega más lenta y cuántas pasaron de 45 minutos.
 
 ### Configuración de ciudad
 

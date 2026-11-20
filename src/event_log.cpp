@@ -158,6 +158,12 @@ void EventLog::write(const Event& event) {
         case EventType::OrderCreated:
             ++summary_.created;
             createdMs_.push_back(e.t);
+            {
+                const std::string name = e.restaurant ? *e.restaurant : std::string();
+                const auto found = restaurantIndex_.emplace(name, static_cast<int>(restaurantNames_.size()));
+                if (found.second) restaurantNames_.push_back(name);
+                createdRestaurant_.push_back(found.first->second);
+            }
             if (e.order) createdAt_[*e.order] = e.t;
             if (e.urgent && *e.urgent) {
                 ++summary_.urgentCreated;

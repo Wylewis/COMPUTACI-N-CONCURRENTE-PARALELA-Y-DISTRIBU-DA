@@ -80,3 +80,17 @@ std::vector<std::int64_t> EventLogger::closedTimesMs() const {
     }
     return log_.closedTimesMs();
 }
+
+std::vector<int> EventLogger::createdRestaurants() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los restaurantes de los pedidos solo son definitivos despues de close()");
+    }
+    return log_.createdRestaurants();
+}
+
+std::vector<std::string> EventLogger::restaurantNames() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los restaurantes de los pedidos solo son definitivos despues de close()");
+    }
+    return log_.restaurantNames();
+}

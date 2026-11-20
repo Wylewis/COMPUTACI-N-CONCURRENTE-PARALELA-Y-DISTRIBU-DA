@@ -26,6 +26,7 @@
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
+#include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
 #include "graph.h"
@@ -513,6 +514,34 @@ int main(int argc, char** argv) {
             std::cerr << "delivery_sim: pedidos en espera, un tramo por segundo (" << (opts.gpuBackend ? "GPU" : "CPU") << "): "
                       << waiting.size() << " segundos; pico de " << peak.waiting << " pedidos en el minuto " << peak.slot / 60
                       << "; al cierre quedan " << waiting.back() << "\n";
+        }
+        const std::vector<int> orderRestaurant = logger.createdRestaurants();
+        if (orderRestaurant.empty()) {
+            std::cerr << "delivery_sim: sin pedidos, no hay tabla de pedidos por restaurante y franja\n";
+        } else {
+            const std::vector<std::string> restaurantNames = logger.restaurantNames();
+            const std::vector<std::int64_t> createdAt = logger.createdTimesMs();
+            std::vector<int> createdMs(createdAt.size());
+            std::int64_t lastCreated = 0;
+            for (std::size_t i = 0; i < createdAt.size(); ++i) {
+                createdMs[i] = static_cast<int>(std::min<std::int64_t>(std::max<std::int64_t>(createdAt[i], 0), 2'000'000'000));
+                lastCreated = std::max<std::int64_t>(lastCreated, createdMs[i]);
+            }
+            const int slotCount = static_cast<int>(lastCreated / kDemandSlotMs) + 1;
+            const int restaurantCount = static_cast<int>(restaurantNames.size());
+            const std::vector<unsigned> perSlot =
+                opts.gpuBackend ? gpuWorker.submit([&orderRestaurant, &createdMs, restaurantCount, slotCount] {
+                                               return restaurantSlotsGpu(orderRestaurant.data(), createdMs.data(),
+                                                                         createdMs.size(), restaurantCount, slotCount);
+                                           }).get()
+                                : restaurantSlotsCpu(orderRestaurant.data(), createdMs.data(), createdMs.size(), restaurantCount,
+                                                     slotCount);
+            const BusiestSlot busiest = busiestSlot(perSlot, slotCount);
+            std::cerr << "delivery_sim: pedidos por restaurante y franja de diez minutos (" << (opts.gpuBackend ? "GPU" : "CPU")
+                      << "): " << restaurantCount << " restaurantes por " << slotCount << " franjas, " << createdMs.size()
+                      << " pedidos; la celda mas cargada es " << restaurantNames[static_cast<std::size_t>(busiest.restaurant)]
+                      << " entre el minuto " << busiest.slot * 10 << " y el " << busiest.slot * 10 + 10 << ", con "
+                      << busiest.orders << " pedidos\n";
         }
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;

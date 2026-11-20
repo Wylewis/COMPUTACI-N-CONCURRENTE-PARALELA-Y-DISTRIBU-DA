@@ -378,6 +378,7 @@ las versiones de CPU.
 | Campo de cobertura de las motos libres | 06, stencil | Otra capa sobre el mapa en la ventana (tecla `c`) y el resumen final | `src/gpu/coverage_field.*` |
 | Indicadores de entrega | 08, reducción | El resumen final de la simulación | `src/gpu/delivery_kpis.*` |
 | Curva de pedidos en espera | 09, scan | El resumen final de la simulación | `src/gpu/backlog_curve.*` |
+| Pedidos por restaurante y franja horaria | 07, histograma | El resumen final de la simulación | `src/gpu/restaurant_slots.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -444,6 +445,13 @@ acumula por secciones de 256 en shared memory, con dos kernels para comparar, Ko
 Brent-Kung, y los totales de las secciones se acumulan en niveles hasta que entran en una sola.
 Al terminar, el programa imprime el pico de pedidos en espera, el minuto en que ocurrió y cuántos
 quedaron al cierre.
+
+La tabla de pedidos por restaurante y franja horaria cuenta cuántos pedidos recibió cada
+restaurante en cada franja de diez minutos: un histograma de dos dimensiones. Son demasiados
+contadores para darle una copia a cada bloque en shared memory, así que en GPU se suma con
+atómicos directamente en la tabla global, con lectura intercalada. Un segundo kernel junta los
+pedidos seguidos que caen en el mismo contador antes de sumar, para comparar. Al terminar, el
+programa imprime el restaurante y la franja con más pedidos.
 
 ### Configuración de ciudad
 

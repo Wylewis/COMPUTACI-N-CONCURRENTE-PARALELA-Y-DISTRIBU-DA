@@ -32,6 +32,8 @@ public:
     std::vector<int> deliveryTimesMs() const;
     std::vector<std::int64_t> createdTimesMs() const;
     std::vector<std::int64_t> closedTimesMs() const;
+    std::vector<int> createdRestaurants() const;
+    std::vector<std::string> restaurantNames() const;
 
 private:
     void writerLoop();

@@ -19,6 +19,7 @@
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
+#include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
 #include "parallel_for.h"
@@ -548,6 +549,60 @@ void benchBacklogCurve(BenchRunner& runner) {
     }
 }
 
+void benchRestaurantSlots(BenchRunner& runner) {
+    const int restaurants = 200, slots = 144;
+    for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
+        if (!runner.wants(n)) continue;
+        std::mt19937 rng(static_cast<unsigned>(n) + 7u);
+        std::vector<int> restaurant(n), ms(n);
+        const std::size_t dayMs = static_cast<std::size_t>(slots) * static_cast<std::size_t>(kDemandSlotMs);
+        for (std::size_t i = 0; i < n; ++i) {
+            restaurant[i] = static_cast<int>(rng() % static_cast<unsigned>(restaurants));
+            ms[i] = static_cast<int>(i * dayMs / n);
+        }
+        std::vector<std::size_t> next(static_cast<std::size_t>(restaurants) + 1, 0);
+        for (const int r : restaurant) ++next[static_cast<std::size_t>(r) + 1];
+        for (std::size_t r = 1; r < next.size(); ++r) next[r] += next[r - 1];
+        std::vector<int> groupedRestaurant(n), groupedMs(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            const std::size_t at = next[static_cast<std::size_t>(restaurant[i])]++;
+            groupedRestaurant[at] = restaurant[i];
+            groupedMs[at] = ms[i];
+        }
+        const std::vector<unsigned> expected = restaurantSlotsCpu(restaurant.data(), ms.data(), n, restaurants, slots);
+        BenchCase c;
+        c.app = "restaurant_slots";
+        c.concept = "07_histogram";
+        c.size = std::to_string(n);
+        c.items = n;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = restaurantSlotsCpu(restaurant.data(), ms.data(), n, restaurants, slots); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = restaurantSlotsCpuParallel(restaurant.data(), ms.data(), n, restaurants, slots, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        const auto onDevice = [&](const std::vector<int>& who, const std::vector<int>& when, SlotKernel kernel) {
+            GpuOutcome r;
+            r.correct = restaurantSlotsGpu(who.data(), when.data(), n, restaurants, slots, kernel, &r.times) == expected;
+            return r;
+        };
+        c.gpu = [&] { return onDevice(restaurant, ms, SlotKernel::Atomic); };
+        c.gpuVariants.push_back({"aggregated", [&] { return onDevice(restaurant, ms, SlotKernel::Aggregated); }});
+        c.gpuVariants.push_back({"grouped", [&] { return onDevice(groupedRestaurant, groupedMs, SlotKernel::Atomic); }});
+        c.gpuVariants.push_back(
+            {"grouped_aggregated", [&] { return onDevice(groupedRestaurant, groupedMs, SlotKernel::Aggregated); }});
+        runner.run(c);
+    }
+}
+
 void benchDemandHeatmap(BenchRunner& runner) {
     const std::vector<float> weights = gaussianWeights();
     for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
@@ -663,5 +718,6 @@ std::vector<BenchApp> benchApps() {
         {"coverage_field", "06_stencil", benchCoverageField},
         {"delivery_kpis", "08_reduction", benchDeliveryKpis},
         {"backlog_curve", "09_scan", benchBacklogCurve},
+        {"restaurant_slots", "07_histogram", benchRestaurantSlots},
     };
 }

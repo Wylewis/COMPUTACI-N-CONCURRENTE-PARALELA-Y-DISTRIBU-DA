@@ -215,6 +215,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--laptop-name", default="laptop")
     ap.add_argument("--gpu-name", default="máquina de la GPU")
+    ap.add_argument("--prefix", default="", help="prefijo de los archivos de salida, para dejar varias aplicaciones en una carpeta")
     args = ap.parse_args()
 
     laptop_raw = pd.read_csv(args.laptop)
@@ -227,6 +228,7 @@ def main():
     cross = crossover(laptop, gpu)
     cross_same = crossover(gpu, gpu)
     os.makedirs(args.out, exist_ok=True)
+    name = lambda base: args.prefix + base
 
     runs = int(gpu[gpu.version == "gpu_e2e"].runs.min())
     lines = [f"# {args.app}: CPU contra GPU", "",
@@ -245,15 +247,15 @@ def main():
     lines += sweep_lines
     sweep_lines_gpu, _ = sweep_table(gpu, args.gpu_name)
     lines += sweep_lines_gpu
-    lines += ["### Gráficos", "", "![Tiempo contra tamaño](tiempo.png)", "", "![Reparto del tiempo de GPU](copias.png)", ""]
+    lines += ["### Gráficos", "", f"![Tiempo contra tamaño]({name('tiempo.png')})", "", f"![Reparto del tiempo de GPU]({name('copias.png')})", ""]
     if sweep:
-        lines += ["![Barrido de hilos](hilos.png)", ""]
-        plot_sweep(sweep, args.app, args.laptop_name, os.path.join(args.out, "hilos.png"))
-    plot_time(laptop, gpu, n_laptop, n_gpu, cross, args.app, os.path.join(args.out, "tiempo.png"))
-    plot_copies(gpu, args.app, os.path.join(args.out, "copias.png"))
-    with open(os.path.join(args.out, "tabla.md"), "w") as f:
+        lines += [f"![Barrido de hilos]({name('hilos.png')})", ""]
+        plot_sweep(sweep, args.app, args.laptop_name, os.path.join(args.out, name("hilos.png")))
+    plot_time(laptop, gpu, n_laptop, n_gpu, cross, args.app, os.path.join(args.out, name("tiempo.png")))
+    plot_copies(gpu, args.app, os.path.join(args.out, name("copias.png")))
+    with open(os.path.join(args.out, name("tabla.md")), "w") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"{args.out}: tabla.md, tiempo.png, copias.png" + (", hilos.png" if sweep else ""))
+    print(f"{args.out}: " + ", ".join(name(b) for b in ["tabla.md", "tiempo.png", "copias.png"] + (["hilos.png"] if sweep else [])))
     print("cruce (laptop):", cross[1], "| cruce (misma maquina):", cross_same[1])
 
 

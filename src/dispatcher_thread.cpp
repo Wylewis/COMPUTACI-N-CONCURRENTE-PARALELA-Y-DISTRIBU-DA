@@ -71,6 +71,10 @@ DispatcherThread::Outcome DispatcherThread::dispatchWithTable(Order& order) {
                 return Outcome::NoCourier;
             }
             const EtaService::Reply reply = pending.get();
+            if (reply.retry) {
+                retries_.fetch_add(1, std::memory_order_acq_rel);
+                continue;
+            }
             if (!reply.found) return Outcome::NoCourier;
             chosen = reply.courierId;
         } else {

@@ -365,6 +365,7 @@ las versiones de CPU.
 |---|---|---|---|
 | Tabla de tiempos de todos contra todos | 03, mosaicos y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
 | Estimación de entrega por lote | 04, accesos agrupados y estructura de arreglos | El despacho, con `--estimator table` (CPU) o `gpu` (por rondas) | `src/gpu/eta_batch.*`, `src/eta_service.*` |
+| Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -376,6 +377,14 @@ tabla de tiempos. Los estimadores `serial`, `async` y `pool` recorren la red por
 `table` usa la tabla en CPU y `gpu` la usa en la tarjeta, donde queda residente. Con `gpu`, un
 coordinador junta los pedidos que esperan, hace un solo lanzamiento por ronda y reparte las motos
 dentro de la ronda. Se elige con `dispatch.estimator` en el config o con `--estimator`.
+
+La mejor moto de cada pedido es el mínimo de su fila en la matriz de estimaciones. En GPU hay un
+bloque por pedido: cada hilo recorre una parte de las motos y guarda su mejor, y el bloque junta
+los 256 candidatos en memoria compartida con un árbol de comparaciones. La clave que se compara
+lleva la hora de entrega en la parte alta y la moto en la baja, así el mínimo es único y da lo
+mismo en CPU y en GPU. En una ronda el kernel de estimación y el de elección corren seguidos sobre
+la tarjeta y solo baja una clave por pedido, no la matriz. Si dos pedidos de la misma ronda eligen
+el último lugar de la misma moto, el segundo vuelve a pedir estimación en la ronda siguiente.
 
 ### Configuración de ciudad
 

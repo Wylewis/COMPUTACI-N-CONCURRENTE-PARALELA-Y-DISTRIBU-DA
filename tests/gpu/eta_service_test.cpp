@@ -106,9 +106,10 @@ int main() {
         gate.set_value();
         busy.get();
         std::map<std::string, int> perCourier;
-        int found = 0;
+        int found = 0, retried = 0;
         for (std::size_t i = 1; i < pending.size(); ++i) {
             const EtaService::Reply reply = pending[i].get();
+            if (reply.retry) ++retried;
             if (!reply.found) continue;
             ++found;
             ++perCourier[reply.courierId];
@@ -118,8 +119,8 @@ int main() {
         for (const auto& entry : perCourier) withinBag = withinBag && entry.second <= 2;
         check(first && r.service->rounds() == 2 && r.service->largestRound() == 19,
               "los 19 pedidos que llegan mientras la GPU esta ocupada salen juntos en una sola ronda");
-        check(found == 12 && perCourier.size() == 6 && withinBag,
-              "dentro de la ronda se prometen 12 lugares, 2 por moto, y los 7 que sobran quedan sin moto");
+        check(found == 12 && perCourier.size() == 6 && withinBag && retried == 7 && r.service->conflicts() == 7,
+              "dentro de la ronda se prometen 12 lugares, 2 por moto, y los 7 que chocan vuelven a pedir");
     }
     {
         Rig r(path, 2, 1);

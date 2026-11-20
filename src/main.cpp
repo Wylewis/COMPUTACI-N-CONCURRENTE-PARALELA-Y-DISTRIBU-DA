@@ -297,7 +297,8 @@ int main(int argc, char** argv) {
         if (etaService) {
             etaService->stop();
             std::cerr << "delivery_sim: rondas de estimacion en GPU: " << etaService->rounds() << ", pedidos estimados: "
-                      << etaService->requests() << ", ronda mas grande: " << etaService->largestRound() << " pedidos\n";
+                      << etaService->requests() << ", ronda mas grande: " << etaService->largestRound()
+                      << " pedidos, choques dentro de una ronda: " << etaService->conflicts() << "\n";
         }
         if (etaDevice) gpuWorker.submit([&etaDevice] { etaDevice.reset(); }).get();
         fleet.join();

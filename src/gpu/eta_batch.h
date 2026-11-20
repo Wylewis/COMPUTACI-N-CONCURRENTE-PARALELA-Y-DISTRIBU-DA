@@ -62,12 +62,16 @@ public:
     EtaBatchGpu& operator=(const EtaBatchGpu&) = delete;
 
     std::vector<int> run(const EtaInput& in, EtaLayout layout = EtaLayout::StructureOfArrays, GpuTimes* times = nullptr);
+    std::vector<unsigned long long> runBest(const EtaInput& in, const std::vector<int>& rotation = {},
+                                            GpuTimes* times = nullptr);
 
     double tableUploadMs() const { return tableUploadMs_; }
     std::size_t tableBytes() const { return tableBytes_; }
 
 private:
     int* table_ = nullptr;
+    int* matrix_ = nullptr;
+    std::size_t matrixCells_ = 0;
     int n_ = 0;
     std::size_t tableBytes_ = 0;
     double tableUploadMs_ = 0.0;

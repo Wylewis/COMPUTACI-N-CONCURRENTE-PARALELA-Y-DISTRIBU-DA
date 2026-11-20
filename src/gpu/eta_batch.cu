@@ -1,5 +1,7 @@
 #include "eta_batch.h"
 
+#include "argmin_rows.h"
+
 #include "cuda_compat.h"
 #include "gpu_occupancy.h"
 #include "gpu_timing.h"
@@ -75,6 +77,7 @@ EtaBatchGpu::EtaBatchGpu(const TravelTable& table) : n_(table.size()) {
 
 EtaBatchGpu::~EtaBatchGpu() {
     if (table_) cudaFree(table_);
+    if (matrix_) cudaFree(matrix_);
 }
 
 std::vector<int> EtaBatchGpu::run(const EtaInput& in, EtaLayout layout, GpuTimes* times) {
@@ -128,6 +131,56 @@ std::vector<int> EtaBatchGpu::run(const EtaInput& in, EtaLayout layout, GpuTimes
         times->totalMs = total.ms();
     }
     return eta;
+}
+
+std::vector<unsigned long long> EtaBatchGpu::runBest(const EtaInput& in, const std::vector<int>& rotation, GpuTimes* times) {
+    const size_t couriersCount = in.couriers();
+    const size_t ordersCount = in.orders();
+    std::vector<unsigned long long> best(ordersCount, etaKeyOf(kEtaUnavailable, 0, 0, 0));
+    if (couriersCount == 0 || ordersCount == 0 || !table_) return best;
+
+    Timer total;
+    const size_t cells = couriersCount * ordersCount;
+    if (cells > matrixCells_) {
+        if (matrix_) CHECK(cudaFree(matrix_));
+        matrix_ = nullptr;
+        matrixCells_ = 0;
+        CHECK(cudaMalloc(&matrix_, cells * sizeof(int)));
+        matrixCells_ = cells;
+    }
+    int* etaDevice = matrix_;
+    unsigned long long* bestDevice = nullptr;
+    CHECK(cudaMalloc(&bestDevice, ordersCount * sizeof(unsigned long long)));
+    OrderArrays orders{toDevice(in.orderRestaurantNode.data(), ordersCount), toDevice(in.orderDeliveryNode.data(), ordersCount),
+                       toDevice(in.orderReadyMs.data(), ordersCount)};
+    CourierArrays couriers{toDevice(in.courierNode.data(), couriersCount), toDevice(in.courierAvailableMs.data(), couriersCount),
+                           toDevice(in.courierFree.data(), couriersCount)};
+    int* rotationDevice = rotation.size() == ordersCount ? toDevice(rotation.data(), ordersCount) : nullptr;
+    const dim3 block(ETA_BLOCK_X, ETA_BLOCK_Y);
+    const dim3 grid(cdiv(static_cast<unsigned>(couriersCount), ETA_BLOCK_X), cdiv(static_cast<unsigned>(ordersCount), ETA_BLOCK_Y));
+    double kernelMs = 0.0;
+    {
+        DeviceTimer kernel;
+        launch(etaSoaKernel, grid, block, static_cast<const int*>(table_), n_, couriers, orders,
+               static_cast<int>(couriersCount), static_cast<int>(ordersCount), in.nowMs, etaDevice);
+        CHECK(cudaGetLastError());
+        argminRowsOnDevice(etaDevice, static_cast<int>(ordersCount), static_cast<int>(couriersCount), rotationDevice, bestDevice);
+        kernelMs = kernel.ms();
+    }
+    CHECK(cudaMemcpy(best.data(), bestDevice, ordersCount * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+    CHECK(cudaFree(bestDevice));
+    if (rotationDevice) CHECK(cudaFree(rotationDevice));
+    CHECK(cudaFree(const_cast<int*>(couriers.node)));
+    CHECK(cudaFree(const_cast<int*>(couriers.availableAtMs)));
+    CHECK(cudaFree(const_cast<int*>(couriers.free)));
+    CHECK(cudaFree(const_cast<int*>(orders.restaurantNode)));
+    CHECK(cudaFree(const_cast<int*>(orders.deliveryNode)));
+    CHECK(cudaFree(const_cast<int*>(orders.readyMs)));
+    if (times) {
+        times->kernelMs = kernelMs;
+        times->totalMs = total.ms();
+    }
+    return best;
 }
 
 std::vector<GpuKernelInfo> etaBatchKernelInfos() {

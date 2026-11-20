@@ -21,6 +21,7 @@ class EtaService {
 public:
     struct Reply {
         bool found = false;
+        bool retry = false;
         std::string courierId;
         int etaMs = kEtaUnavailable;
     };
@@ -36,6 +37,7 @@ public:
     std::int64_t rounds() const { return rounds_.load(std::memory_order_acquire); }
     std::int64_t requests() const { return requests_.load(std::memory_order_acquire); }
     std::int64_t largestRound() const { return largest_.load(std::memory_order_acquire); }
+    std::int64_t conflicts() const { return conflicts_.load(std::memory_order_acquire); }
 
 private:
     struct Pending {
@@ -56,6 +58,6 @@ private:
     std::condition_variable available_;
     std::deque<Pending> pending_;
     bool stopping_ = false;
-    std::atomic<std::int64_t> rounds_{0}, requests_{0}, largest_{0};
+    std::atomic<std::int64_t> rounds_{0}, requests_{0}, largest_{0}, conflicts_{0};
     std::thread thread_;
 };

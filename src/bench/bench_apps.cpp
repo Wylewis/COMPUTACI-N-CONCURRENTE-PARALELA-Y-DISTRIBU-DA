@@ -8,6 +8,7 @@
 #include <random>
 #include <thread>
 
+#include "gpu/argmin_rows.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/travel_table.h"
@@ -120,7 +121,8 @@ void benchEtaBatch(BenchRunner& runner) {
     const TravelTable table(city.n, travelTableCpuParallel(city, builders));
     std::shared_ptr<EtaBatchGpu> device;
     const std::vector<std::pair<std::size_t, std::size_t>> sizes{{10, 50}, {50, 200}, {100, 500}, {200, 1000}, {500, 2000}, {1000, 3000}};
-    for (const auto& [orders, couriers] : sizes) {
+    for (const auto& size : sizes) {
+        const std::size_t orders = size.first, couriers = size.second;
         const std::size_t items = orders * couriers;
         if (!runner.wants(items)) continue;
         const EtaInput in = randomEtaInput(city.n, orders, couriers, static_cast<unsigned>(items));
@@ -166,6 +168,114 @@ void benchEtaBatch(BenchRunner& runner) {
     }
 }
 
+void benchDispatchArgmin(BenchRunner& runner) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    const TravelTable table(city.n, travelTableCpuParallel(city, builders));
+    const std::vector<std::pair<std::size_t, std::size_t>> sizes{{10, 50}, {50, 200}, {100, 500}, {200, 1000}, {500, 2000}, {1000, 3000}, {4000, 3000}};
+    for (const auto& size : sizes) {
+        const std::size_t orders = size.first, couriers = size.second;
+        const std::size_t items = orders * couriers;
+        if (!runner.wants(items)) continue;
+        const EtaInput in = randomEtaInput(city.n, orders, couriers, static_cast<unsigned>(items));
+        std::vector<int> matrix(items);
+        etaBatchCpu(table, in, matrix.data());
+        const std::vector<EtaKey> expected = argminRowsCpu(matrix.data(), orders, couriers);
+        BenchCase c;
+        c.app = "dispatch_argmin";
+        c.concept = "08_reduction";
+        c.size = std::to_string(orders) + "x" + std::to_string(couriers);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] { out = argminRowsCpu(matrix.data(), orders, couriers); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] { out = argminRowsCpuParallel(matrix.data(), orders, couriers, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = argminRowsGpu(matrix.data(), orders, couriers, nullptr, &r.times) == expected;
+            return r;
+        };
+        runner.run(c);
+    }
+}
+
+void benchDispatchRound(BenchRunner& runner) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    const TravelTable table(city.n, travelTableCpuParallel(city, builders));
+    std::shared_ptr<EtaBatchGpu> device;
+    const std::vector<std::pair<std::size_t, std::size_t>> sizes{{10, 50}, {50, 200}, {100, 500}, {200, 1000}, {500, 2000}, {1000, 3000}, {4000, 3000}};
+    for (const auto& size : sizes) {
+        const std::size_t orders = size.first, couriers = size.second;
+        const std::size_t items = orders * couriers;
+        if (!runner.wants(items)) continue;
+        const EtaInput in = randomEtaInput(city.n, orders, couriers, static_cast<unsigned>(items));
+        std::vector<int> matrix(items);
+        etaBatchCpu(table, in, matrix.data());
+        const std::vector<EtaKey> expected = argminRowsCpu(matrix.data(), orders, couriers);
+        BenchCase c;
+        c.app = "dispatch_round";
+        c.concept = "08_reduction";
+        c.size = std::to_string(orders) + "x" + std::to_string(couriers);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] {
+                etaBatchCpu(table, in, matrix.data());
+                out = argminRowsCpu(matrix.data(), orders, couriers);
+            });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] {
+                etaBatchCpuParallel(table, in, matrix.data(), pool);
+                out = argminRowsCpuParallel(matrix.data(), orders, couriers, pool);
+            });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            r.correct = device->runBest(in, {}, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"sustained", [&] {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            for (int round = 0; round < 16; ++round) r.correct = device->runBest(in, {}, &r.times) == expected;
+            return r;
+        }});
+        c.gpuVariants.push_back({"matrix", [&] {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            GpuTimes etaTimes;
+            const std::vector<int> down = device->run(in, EtaLayout::StructureOfArrays, &etaTimes);
+            std::vector<EtaKey> out;
+            const double reduceMs = timeMs([&] { out = argminRowsCpu(down.data(), orders, couriers); });
+            r.times.kernelMs = etaTimes.kernelMs;
+            r.times.totalMs = etaTimes.totalMs + reduceMs;
+            r.correct = out == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 }
 
 std::vector<BenchApp> benchApps() {
@@ -173,5 +283,7 @@ std::vector<BenchApp> benchApps() {
         {"vector_add", "00_reference", benchVectorAdd},
         {"travel_table", "03_memory_tiling", benchTravelTable},
         {"eta_batch", "04_performance", benchEtaBatch},
+        {"dispatch_argmin", "08_reduction", benchDispatchArgmin},
+        {"dispatch_round", "08_reduction", benchDispatchRound},
     };
 }

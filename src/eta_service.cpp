@@ -1,5 +1,7 @@
 #include "eta_service.h"
 
+#include "gpu/argmin_rows.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -62,13 +64,19 @@ void EtaService::loop() {
             in.orderReadyMs.push_back(p.readyMs);
         }
 
-        std::vector<int> eta;
+        const int couriersCount = static_cast<int>(fleet.size());
+        std::vector<int> rotation(round.size(), 0);
+        if (couriersCount > 0)
+            for (std::size_t i = 0; i < round.size(); ++i) rotation[i] = static_cast<int>((i * 7919) % fleet.size());
+
+        std::vector<EtaKey> best;
         try {
             EtaBatchGpu* device = &device_;
             const EtaInput* input = &in;
-            eta = gpu_.submit([device, input] { return device->run(*input); }).get();
+            const std::vector<int>* turns = &rotation;
+            best = gpu_.submit([device, input, turns] { return device->runBest(*input, *turns); }).get();
         } catch (const std::exception&) {
-            eta.clear();
+            best.clear();
         }
 
         rounds_.fetch_add(1, std::memory_order_acq_rel);
@@ -76,20 +84,19 @@ void EtaService::loop() {
         if (static_cast<std::int64_t>(round.size()) > largest_.load(std::memory_order_acquire))
             largest_.store(static_cast<std::int64_t>(round.size()), std::memory_order_release);
 
-        const std::size_t couriers = fleet.size();
-        const bool computed = eta.size() == couriers * round.size();
+        const bool computed = best.size() == round.size() && couriersCount > 0;
         for (std::size_t i = 0; i < round.size(); ++i) {
             Reply reply;
-            if (computed) {
-                const int* row = eta.data() + i * couriers;
-                std::size_t best = couriers;
-                for (std::size_t c = 0; c < couriers; ++c)
-                    if (room[c] > 0 && row[c] != kEtaUnavailable && (best == couriers || row[c] < row[best])) best = c;
-                if (best != couriers) {
-                    --room[best];
+            if (computed && keyHasCourier(best[i])) {
+                const std::size_t chosen = static_cast<std::size_t>(courierOfKey(best[i], rotation[i], couriersCount));
+                if (room[chosen] > 0) {
+                    --room[chosen];
                     reply.found = true;
-                    reply.courierId = fleet[best].id;
-                    reply.etaMs = row[best];
+                    reply.courierId = fleet[chosen].id;
+                    reply.etaMs = etaOfKey(best[i]);
+                } else {
+                    reply.retry = true;
+                    conflicts_.fetch_add(1, std::memory_order_acq_rel);
                 }
             }
             round[i].promise.set_value(std::move(reply));

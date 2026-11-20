@@ -54,7 +54,7 @@ int main() {
         const int U = kUnreachableMs;
         check(cpu == std::vector<int>{0, 100, 150, U, 0, 50, U, U, 0},
               "linea de un sentido A-B-C: Dijkstra da 100, 150 y 50, y la vuelta es inalcanzable");
-        check(gpu == cpu && rounds >= 1, "el producto min-plus en mosaicos da la misma tabla");
+        check(gpu == cpu && rounds >= 1, "el producto min-plus en tiles da la misma tabla");
     }
     for (const int n : {17, 37, 64}) {
         const CsrGraph g = randomCity(n, static_cast<unsigned>(n));

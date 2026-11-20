@@ -1,6 +1,6 @@
 # Tabla de tiempos de todos contra todos: ¿vale la pena la GPU?
 
-Concepto del curso: 03, mosaicos y memoria compartida. Primera aplicación de ese concepto.
+Concepto del curso: 03, tiling y memoria compartida. Primera aplicación de ese concepto.
 Código: `src/gpu/travel_table.*`. Datos: `mac.csv`, `pc.csv`. Tabla y gráficos: `tabla.md`,
 generados por `tools/gpu_report.py`.
 
@@ -50,14 +50,14 @@ corrida la tabla se compara celda por celda con la de Dijkstra de un hilo.
 
 - **Malla y bloques.** Un hilo por celda. Bloques de 16 × 16 = 256 hilos y una malla de
   `ceil(n/16)` × `ceil(n/16)` bloques: 8 × 8 para 128 nodos, 256 × 256 para 4096. El bloque
-  coincide con el mosaico: cada bloque calcula un cuadrado de 16 × 16 celdas de la tabla.
-- **Por qué 16.** Es el mayor mosaico cuadrado cuyo bloque no pasa de 256 hilos con margen para
+  coincide con el tile: cada bloque calcula un cuadrado de 16 × 16 celdas de la tabla.
+- **Por qué 16.** Es el mayor tile cuadrado cuyo bloque no pasa de 256 hilos con margen para
   la ocupación completa (abajo). Con 32 × 32 serían 1024 hilos por bloque y solo cabría un bloque
   por multiprocesador.
-- **Memoria compartida.** En cada fase el bloque carga un mosaico de la fila y uno de la columna,
+- **Memoria compartida.** En cada fase el bloque carga un tile de la fila y uno de la columna,
   2 × 16 × 16 enteros = 2048 bytes, con lecturas consecutivas en memoria global, y hace las 16
   combinaciones de esa fase leyendo solo memoria compartida. Cada valor traído de memoria global
-  se usa 16 veces. Sin mosaicos, cada combinación costaría dos lecturas globales, y la de la
+  se usa 16 veces. Sin tiles, cada combinación costaría dos lecturas globales, y la de la
   columna saltaría de fila en fila, sin agruparse.
 - **Bordes.** Las celdas fuera de la tabla se cargan como "inalcanzable", que es el neutro del
   mínimo, así todos los hilos del bloque pasan por las mismas barreras.
@@ -121,7 +121,7 @@ trabajo por segundo, pero le toca muchísimo más trabajo.
 
 **Límite por memoria o por cómputo.** Por fase y por hilo el kernel lee 8 bytes de memoria global
 y hace 16 sumas y 16 comparaciones de enteros sobre memoria compartida: 4 operaciones por byte
-global, contra 0,25 de la versión sin mosaicos. Los mosaicos sacan al kernel del límite de
+global, contra 0,25 de la versión sin tiles. Los tiles sacan al kernel del límite de
 memoria; lo que lo limita es el volumen de cómputo.
 
 **Eficiencia de ejecución.** El compilador (`nvcc -Xptxas -v`) informa 36 registros por hilo y

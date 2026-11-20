@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
         const auto tableMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - tableStart).count();
         std::cerr << "delivery_sim: tabla de tiempos de " << travel.size() << " x " << travel.size() << " en "
-                  << tableMs << " ms (" << (opts.gpuBackend ? "GPU, min-plus en mosaicos" : "CPU, Dijkstra multihilo")
+                  << tableMs << " ms (" << (opts.gpuBackend ? "GPU, min-plus en tiles" : "CPU, Dijkstra multihilo")
                   << "), " << travel.unreachablePairs() << " pares inalcanzables\n";
         std::unique_ptr<EtaBatchGpu> etaDevice;
         if (config.dispatch.estimator == "gpu") {

@@ -368,14 +368,14 @@ las versiones de CPU.
 
 | Aplicación | Concepto del curso | Dónde entra en el programa | Archivos |
 |---|---|---|---|
-| Tabla de tiempos de todos contra todos | 03, mosaicos y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
+| Tabla de tiempos de todos contra todos | 03, tiling y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
 | Estimación de entrega por lote | 04, accesos agrupados y estructura de arreglos | El despacho, con `--estimator table` (CPU) o `gpu` (por rondas) | `src/gpu/eta_batch.*`, `src/eta_service.*` |
 | Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
 | Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
-producto de matrices min-plus en mosaicos de 16 por 16 cargados en memoria compartida, elevado al
+producto de matrices min-plus en tiles de 16 por 16 cargados en memoria compartida, elevado al
 cuadrado hasta que deja de cambiar. Los pares sin camino quedan marcados con `kUnreachableMs`.
 
 La estimación por lote calcula la hora de entrega de cada par pedido × moto con dos lecturas a la

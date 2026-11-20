@@ -332,7 +332,8 @@ fue correcto. De ese archivo salen todas las tablas y gráficos.
 Para cada aplicación y cada tamaño mide cuatro versiones: `cpu_1` (un hilo), `cpu_n` (multihilo
 sobre el pool), `gpu_kernel` (solo los kernels, con eventos CUDA) y `gpu_e2e` (kernels más copias
 y reserva de memoria). Hace una corrida de calentamiento y diez medidas, con las versiones
-intercaladas en cada repetición, y comprueba el resultado en todas. Opciones: `--bench-reps <n>`,
+intercaladas en cada repetición, y comprueba el resultado en todas. Una aplicación puede sumar
+filas `cpu_ref_<nombre>` con otro algoritmo de CPU de un hilo, como referencia. Opciones: `--bench-reps <n>`,
 `--bench-once` (una corrida sin calentamiento, para los perfiladores), `--bench-sweep` (la versión
 multihilo con 1, 2, 4... hilos), `--bench-threads <n>`, `--bench-apps <a,b>` y
 `--bench-max-items <n>`. Las versiones de GPU solo se miden con una GPU real: compilado con la

@@ -54,6 +54,7 @@ void BenchRunner::run(const BenchCase& c) {
         if (c.cpu1) c.cpu1();
         if (c.cpuN)
             for (unsigned t : threadCounts_) c.cpuN(poolOf(t));
+        for (const auto& reference : c.cpuReferences) reference.second();
         if (withGpu) (void)gpuWorker_.submit(c.gpu).get();
         if (realGpu_)
             for (const auto& variant : c.gpuVariants) (void)gpuWorker_.submit(variant.second).get();
@@ -69,6 +70,10 @@ void BenchRunner::run(const BenchCase& c) {
                 const Timed r = c.cpuN(poolOf(t));
                 row(c, "cpu_n", t, rep, r.ms, r.correct);
             }
+        }
+        for (const auto& reference : c.cpuReferences) {
+            const Timed r = reference.second();
+            row(c, "cpu_ref_" + reference.first, 1, rep, r.ms, r.correct);
         }
         if (withGpu) {
             const GpuOutcome r = onDevice(c.gpu);

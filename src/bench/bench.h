@@ -44,6 +44,7 @@ struct BenchCase {
     std::size_t items = 0;
     std::function<Timed()> cpu1;
     std::function<Timed(ThreadPool&)> cpuN;
+    std::vector<std::pair<std::string, std::function<Timed()>>> cpuReferences;
     std::function<GpuOutcome()> gpu;
     std::vector<std::pair<std::string, std::function<GpuOutcome()>>> gpuVariants;
 };

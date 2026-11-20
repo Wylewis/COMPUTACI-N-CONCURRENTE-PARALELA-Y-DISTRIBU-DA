@@ -373,6 +373,7 @@ las versiones de CPU.
 | Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
 | Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
 | Histograma de tiempos de entrega | 07, histograma | El resumen final de la simulación | `src/gpu/delivery_histogram.*` |
+| Mapa de calor de demanda | 05, convolución | Una capa sobre el mapa en la ventana (tecla `h`) y el resumen final | `src/gpu/demand_heatmap.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -407,6 +408,12 @@ El histograma cuenta cuántas entregas tardaron cada cantidad de minutos, un tra
 GPU hay dos kernels: uno suma con atómicos directamente en los contadores globales, y otro le da
 a cada bloque un histograma propio en shared memory que se vuelca al final. Al terminar la
 simulación el programa imprime la mediana, el p90, el p99 y el minuto más cargado.
+
+El mapa de calor reparte en una cuadrícula de 64 por 64 los restaurantes de los pedidos de los
+últimos diez minutos simulados y la suaviza con una convolución de 7 por 7 con pesos gaussianos.
+En GPU los pesos van en memoria constante. Como son números decimales, la prueba compara la
+salida de GPU con la de CPU con una tolerancia de una parte en diez mil. En la ventana, la tecla
+`h` muestra u oculta la capa; al terminar, el programa informa la zona de mayor demanda.
 
 ### Configuración de ciudad
 

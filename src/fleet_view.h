@@ -26,3 +26,5 @@ void drawCountersPanel(cv::Mat& frame, const PanelStats& stats);
 
 void drawFleet(cv::Mat& frame, const MapProjection& proj, const Graph& graph,
                const std::vector<CourierView>& fleet, std::int64_t nowMs);
+
+void drawHeatmap(cv::Mat& frame, const std::vector<float>& heat, int grid);

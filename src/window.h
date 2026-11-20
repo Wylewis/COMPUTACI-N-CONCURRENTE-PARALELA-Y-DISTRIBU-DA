@@ -17,6 +17,7 @@ public:
     cv::Mat frame() const { return base_.clone(); }
 
     bool show(const cv::Mat& frame, int waitMs);
+    int lastKey() const { return lastKey_; }
 
     static cv::Scalar restaurantColor() { return {0, 140, 255}; }
     static cv::Scalar twoWayColor() { return {120, 120, 120}; }
@@ -28,4 +29,5 @@ private:
     MapProjection projection_;
     cv::Mat base_;
     bool opened_ = false;
+    int lastKey_ = -1;
 };

@@ -2,6 +2,7 @@
 
 #include "argmin_rows.h"
 #include "delivery_histogram.h"
+#include "demand_heatmap.h"
 #include "eta_batch.h"
 #include "group_orders.h"
 #include "travel_table.h"
@@ -12,5 +13,6 @@ std::vector<GpuKernelInfo> gpuKernelInfos() {
     all.push_back(argminRowsKernelInfo());
     for (const GpuKernelInfo& k : groupOrdersKernelInfos()) all.push_back(k);
     for (const GpuKernelInfo& k : deliveryHistogramKernelInfos()) all.push_back(k);
+    for (const GpuKernelInfo& k : demandHeatmapKernelInfos()) all.push_back(k);
     return all;
 }

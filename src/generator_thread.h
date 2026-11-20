@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
+#include <string>
 #include <thread>
 
 #include "event_logger.h"
@@ -19,6 +21,7 @@ public:
     GeneratorThread(const GeneratorThread&) = delete;
     GeneratorThread& operator=(const GeneratorThread&) = delete;
 
+    void onCreated(std::function<void(const std::string& restaurantId)> observer) { observer_ = std::move(observer); }
     void start();
     void join();
 
@@ -34,6 +37,7 @@ private:
     EventLogger& logger_;
     const SimClock& clock_;
     StopSignal& stop_;
+    std::function<void(const std::string&)> observer_;
     std::thread thread_;
     std::atomic<std::int64_t> batches_{0};
     std::atomic<std::int64_t> created_{0};

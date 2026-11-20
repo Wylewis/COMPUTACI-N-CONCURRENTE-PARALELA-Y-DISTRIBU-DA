@@ -2,10 +2,13 @@
 #include <memory>
 #include <iostream>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "bench/bench.h"
 #include "config.h"
+#include "demand_log.h"
 #include "dispatcher_thread.h"
 #include "distance_table_parallel.h"
 #include "eta_service.h"
@@ -13,6 +16,7 @@
 #include "fleet.h"
 #include "generator_thread.h"
 #include "gpu/delivery_histogram.h"
+#include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
@@ -263,6 +267,33 @@ int main(int argc, char** argv) {
         clock.start();
         fleet.start();
         for (auto& d : dispatchers) d->start();
+        DemandLog demand;
+        std::unordered_map<std::string, std::pair<float, float>> restaurantSpot;
+        for (const RestaurantConfig& r : config.restaurants) {
+            const Graph::Node& node = graph.nodeAt(graph.nodeIndex(r.node));
+            const Bounds& b = config.map.bounds;
+            const double width = b.east - b.west, height = b.north - b.south;
+            if (width > 0.0 && height > 0.0)
+                restaurantSpot[r.id] = {static_cast<float>((node.lon - b.west) / width),
+                                        static_cast<float>((b.north - node.lat) / height)};
+        }
+        generatorThread.onCreated([&demand, &restaurantSpot, &clock](const std::string& restaurantId) {
+            const auto spot = restaurantSpot.find(restaurantId);
+            if (spot != restaurantSpot.end()) demand.add(clock.nowMs(), spot->second.first, spot->second.second);
+        });
+        static constexpr int heatGrid = 64;
+        const std::vector<float> heatWeights = gaussianWeights();
+        const auto demandHeat = [&](std::int64_t fromMs) {
+            const std::vector<DemandPoint> points = demand.since(fromMs);
+            std::vector<float> xs, ys;
+            xs.reserve(points.size()), ys.reserve(points.size());
+            for (const DemandPoint& p : points) xs.push_back(p.x), ys.push_back(p.y);
+            const std::vector<float> counts = binDemand(xs.data(), ys.data(), points.size(), heatGrid);
+            return opts.gpuBackend ? gpuWorker.submit([&counts, &heatWeights] {
+                                                  return smoothGpu(counts.data(), heatGrid, heatWeights.data());
+                                              }).get()
+                                   : smoothCpuParallel(counts.data(), heatGrid, heatWeights.data(), estimators);
+        };
         generatorThread.start();
         std::cout << kStartLine << std::endl;
 
@@ -271,8 +302,17 @@ int main(int argc, char** argv) {
 #ifdef HAVE_OPENCV
         if (opts.window) {
             MapWindow window(config, graph);
+            std::cerr << "delivery_sim: en la ventana, la tecla h muestra u oculta el mapa de calor de demanda\n";
+            bool showHeat = false;
+            std::vector<float> heat;
+            std::int64_t frames = 0;
             while (!stop.requested() && (durationMs == 0 || clock.nowMs() < durationMs)) {
                 cv::Mat frame = window.frame();
+                if (showHeat) {
+                    if (heat.empty() || frames % 15 == 0) heat = demandHeat(clock.nowMs() - 600'000);
+                    drawHeatmap(frame, heat, heatGrid);
+                }
+                ++frames;
                 drawFleet(frame, window.projection(), graph, fleet.views(), clock.nowMs());
                 PanelStats st;
                 st.created = generatorThread.created();
@@ -285,6 +325,10 @@ int main(int argc, char** argv) {
                 if (!window.show(frame, 33)) {
                     windowClosed = true;
                     break;
+                }
+                if (window.lastKey() == 'h') {
+                    showHeat = !showHeat;
+                    heat.clear();
                 }
             }
         } else
@@ -326,6 +370,16 @@ int main(int argc, char** argv) {
                   << rejectedNoCourier << " sin repartidor, " << fleet.delivered() << " entregados, "
                   << fleet.breakdowns() << " averias, " << fleet.rescues() << " rescates, " << unfinished.size()
                   << " en el libro y " << inBags << " en mochilas\n";
+        if (demand.size() == 0) {
+            std::cerr << "delivery_sim: sin pedidos, no hay mapa de calor de demanda\n";
+        } else {
+            const std::vector<float> wholeRun = demandHeat(0);
+            const std::size_t hottest = hottestCell(wholeRun);
+            std::cerr << "delivery_sim: mapa de calor de demanda, cuadricula de " << heatGrid << " x " << heatGrid << " ("
+                      << (opts.gpuBackend ? "GPU" : "CPU") << "): " << demand.size()
+                      << " pedidos; zona de mayor demanda en la fila " << hottest / static_cast<std::size_t>(heatGrid)
+                      << ", columna " << hottest % static_cast<std::size_t>(heatGrid) << "\n";
+        }
         const std::vector<int> deliveryMs = logger.deliveryTimesMs();
         if (deliveryMs.empty()) {
             std::cerr << "delivery_sim: sin entregas, no hay histograma de tiempos\n";

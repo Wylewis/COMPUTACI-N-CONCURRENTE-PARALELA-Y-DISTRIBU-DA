@@ -11,6 +11,7 @@
 
 #include "gpu/argmin_rows.h"
 #include "gpu/delivery_histogram.h"
+#include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
@@ -457,6 +458,48 @@ void benchDeliveryHistogram(BenchRunner& runner) {
     }
 }
 
+void benchDemandHeatmap(BenchRunner& runner) {
+    const std::vector<float> weights = gaussianWeights();
+    for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
+        const std::size_t cells = static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
+        if (!runner.wants(cells)) continue;
+        std::mt19937 rng(static_cast<unsigned>(grid));
+        std::vector<float> counts(cells);
+        for (float& c : counts) c = rng() % 16u == 0 ? static_cast<float>(1u + rng() % 5u) : 0.0f;
+        const std::vector<float> expected = smoothCpu(counts.data(), grid, weights.data());
+        BenchCase c;
+        c.app = "demand_heatmap";
+        c.concept = "05_conv";
+        c.size = std::to_string(grid) + "x" + std::to_string(grid);
+        c.items = cells;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<float> out;
+            r.ms = timeMs([&] { out = smoothCpu(counts.data(), grid, weights.data()); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<float> out;
+            r.ms = timeMs([&] { out = smoothCpuParallel(counts.data(), grid, weights.data(), pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = heatmapsMatch(expected, smoothGpu(counts.data(), grid, weights.data(), HeatWeights::Constant, &r.times));
+            return r;
+        };
+        c.gpuVariants.push_back({"globalweights", [&] {
+            GpuOutcome r;
+            r.correct = heatmapsMatch(expected, smoothGpu(counts.data(), grid, weights.data(), HeatWeights::Global, &r.times));
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 }
 
 std::vector<BenchApp> benchApps() {
@@ -470,5 +513,6 @@ std::vector<BenchApp> benchApps() {
         {"round_arrival", "09_scan", benchRoundArrival},
         {"round_grouped", "09_scan", benchRoundGrouped},
         {"delivery_histogram", "07_histogram", benchDeliveryHistogram},
+        {"demand_heatmap", "05_conv", benchDemandHeatmap},
     };
 }

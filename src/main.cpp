@@ -313,7 +313,6 @@ int main(int argc, char** argv) {
             dispatchers.back()->useTravelTable(&travel, etaService.get());
         }
 
-        clock.start();
         if (!config.restaurants.empty() && !travel.empty()) {
             std::vector<int> restaurantNodes;
             for (const RestaurantConfig& r : config.restaurants) restaurantNodes.push_back(static_cast<int>(graph.nodeIndex(r.node)));
@@ -329,6 +328,7 @@ int main(int argc, char** argv) {
                       << " viajes entre esquinas (" << (pairs > 0 ? 100ULL * wins[top] / pairs : 0ULL) << " %), entre "
                       << config.restaurants.size() << " restaurantes\n";
         }
+        clock.start();
         fleet.start();
         for (auto& d : dispatchers) d->start();
         DemandLog demand;

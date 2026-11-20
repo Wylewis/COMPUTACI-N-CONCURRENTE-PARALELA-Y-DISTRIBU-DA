@@ -375,6 +375,7 @@ las versiones de CPU.
 | Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
 | Histograma de tiempos de entrega | 07, histograma | El resumen final de la simulación | `src/gpu/delivery_histogram.*` |
 | Mapa de calor de demanda | 05, convolución | Una capa sobre el mapa en la ventana (tecla `h`) y el resumen final | `src/gpu/demand_heatmap.*` |
+| Campo de cobertura de las motos libres | 06, stencil | Otra capa sobre el mapa en la ventana (tecla `c`) y el resumen final | `src/gpu/coverage_field.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -415,6 +416,17 @@ El mapa de calor reparte en una cuadrícula de 64 por 64 los restaurantes de los
 En GPU los pesos van en memoria constante. Como son números decimales, la prueba compara la
 salida de GPU con la de CPU con una tolerancia de una parte en diez mil. En la ventana, la tecla
 `h` muestra u oculta la capa; al terminar, el programa informa la zona de mayor demanda.
+
+El campo de cobertura dice, para cada celda de la misma cuadrícula de 64 por 64, cuánto tardaría
+en llegar la moto libre más cercana. Las celdas con una moto libre valen cero y el resto empieza
+sin valor; en cada pasada, cada celda toma el menor entre su valor y el de sus cuatro vecinas más
+el tiempo de cruzar una celda, y se repite hasta que nada cambia. Solo se actualizan las celdas
+por las que pasa alguna calle. Cada pasada lee un arreglo y escribe en otro, y los dos se
+intercambian. En GPU hay dos kernels: uno lee las vecinas de memoria global y otro carga antes un
+tile de 16 por 16 en shared memory y calcula las 14 por 14 celdas de adentro. La convergencia se
+revisa cada 16 pasadas con una reducción que cuenta los bloques que cambiaron. En la ventana, la
+tecla `c` muestra u oculta la capa, de verde (cerca) a rojo (lejos); al terminar, el programa
+informa la zona peor cubierta.
 
 ### Configuración de ciudad
 

@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <iostream>
 #include <string>
@@ -15,6 +17,7 @@
 #include "event_logger.h"
 #include "fleet.h"
 #include "generator_thread.h"
+#include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
 #include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
@@ -48,6 +51,46 @@ struct Options {
     bool bench = false;
     BenchOptions benchOptions;
 };
+
+std::pair<float, float> mapSpot(const Bounds& b, double lat, double lon) {
+    const double width = b.east - b.west, height = b.north - b.south;
+    if (!(width > 0.0) || !(height > 0.0)) return {-1.0f, -1.0f};
+    return {static_cast<float>((lon - b.west) / width), static_cast<float>((b.north - lat) / height)};
+}
+
+CoverageMap streetCoverageMap(const Config& config, const Graph& graph, int grid) {
+    const Bounds& b = config.map.bounds;
+    CoverageMap map;
+    map.grid = grid;
+    map.open.assign(static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid), 0);
+    const double msPerMetre = 3600.0 / std::max(1.0, config.fleet.speedKmh);
+    const double midLat = (b.north + b.south) / 2.0, midLon = (b.east + b.west) / 2.0;
+    map.stepXMs = std::max(1, static_cast<int>(std::lround(distanceM(midLat, b.west, midLat, b.east) / grid * msPerMetre)));
+    map.stepYMs = std::max(1, static_cast<int>(std::lround(distanceM(b.south, midLon, b.north, midLon) / grid * msPerMetre)));
+    const auto cellOf = [grid](float v) { return std::clamp(static_cast<int>(v * static_cast<float>(grid)), 0, grid - 1); };
+    const auto open = [&](int row, int col) {
+        map.open[static_cast<std::size_t>(row) * static_cast<std::size_t>(grid) + static_cast<std::size_t>(col)] = 1;
+    };
+    for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
+        const auto from = mapSpot(b, graph.nodeAt(i).lat, graph.nodeAt(i).lon);
+        for (const Graph::Edge& e : graph.edgesAt(i)) {
+            const auto to = mapSpot(b, graph.nodeAt(e.to).lat, graph.nodeAt(e.to).lon);
+            const float span = std::max(std::fabs(to.first - from.first), std::fabs(to.second - from.second));
+            const int pieces = 1 + static_cast<int>(span * static_cast<float>(grid) * 2.0f);
+            int lastRow = cellOf(from.second), lastCol = cellOf(from.first);
+            open(lastRow, lastCol);
+            for (int k = 1; k <= pieces; ++k) {
+                const float t = static_cast<float>(k) / static_cast<float>(pieces);
+                const int row = cellOf(from.second + (to.second - from.second) * t);
+                const int col = cellOf(from.first + (to.first - from.first) * t);
+                if (row != lastRow && col != lastCol) open(lastRow, col);
+                open(row, col);
+                lastRow = row, lastCol = col;
+            }
+        }
+    }
+    return map;
+}
 
 void printUsage(std::ostream& out) {
     out << "Uso: delivery_sim <config.json> [--log <ruta>] [--no-window | --headless] [--backend cpu|gpu]\n"
@@ -271,11 +314,7 @@ int main(int argc, char** argv) {
         std::unordered_map<std::string, std::pair<float, float>> restaurantSpot;
         for (const RestaurantConfig& r : config.restaurants) {
             const Graph::Node& node = graph.nodeAt(graph.nodeIndex(r.node));
-            const Bounds& b = config.map.bounds;
-            const double width = b.east - b.west, height = b.north - b.south;
-            if (width > 0.0 && height > 0.0)
-                restaurantSpot[r.id] = {static_cast<float>((node.lon - b.west) / width),
-                                        static_cast<float>((b.north - node.lat) / height)};
+            restaurantSpot[r.id] = mapSpot(config.map.bounds, node.lat, node.lon);
         }
         generatorThread.onCreated([&demand, &restaurantSpot, &clock](const std::string& restaurantId) {
             const auto spot = restaurantSpot.find(restaurantId);
@@ -294,6 +333,33 @@ int main(int argc, char** argv) {
                                               }).get()
                                    : smoothCpuParallel(counts.data(), heatGrid, heatWeights.data(), estimators);
         };
+        const CoverageMap streetMap = streetCoverageMap(config, graph, heatGrid);
+        const auto idleSpots = [&] {
+            std::vector<float> spots;
+            const std::int64_t now = clock.nowMs();
+            for (const CourierView& v : fleet.views()) {
+                if (v.state != CourierState::Idle) continue;
+                GeoPoint at;
+                if (v.trip) {
+                    at = v.trip->positionAt(now);
+                } else {
+                    const Graph::Node& node = graph.nodeAt(graph.nodeIndex(v.node));
+                    at = {node.lat, node.lon};
+                }
+                const auto spot = mapSpot(config.map.bounds, at.lat, at.lon);
+                spots.push_back(spot.first), spots.push_back(spot.second);
+            }
+            return spots;
+        };
+        const auto coverageFrom = [&](const std::vector<float>& spots, int* sweeps) {
+            std::vector<float> xs, ys;
+            for (std::size_t i = 0; i + 1 < spots.size(); i += 2) xs.push_back(spots[i]), ys.push_back(spots[i + 1]);
+            const std::vector<int> seed = coverageSeed(streetMap, xs.data(), ys.data(), xs.size());
+            return opts.gpuBackend ? gpuWorker.submit([&streetMap, &seed, sweeps] {
+                                                  return coverageGpu(streetMap, seed.data(), CoverKernel::Basic, nullptr, sweeps);
+                                              }).get()
+                                   : coverageCpu(streetMap, seed.data(), sweeps);
+        };
         generatorThread.start();
         std::cout << kStartLine << std::endl;
 
@@ -302,12 +368,18 @@ int main(int argc, char** argv) {
 #ifdef HAVE_OPENCV
         if (opts.window) {
             MapWindow window(config, graph);
-            std::cerr << "delivery_sim: en la ventana, la tecla h muestra u oculta el mapa de calor de demanda\n";
-            bool showHeat = false;
+            std::cerr << "delivery_sim: en la ventana, la tecla h muestra u oculta el mapa de calor de demanda y la tecla c "
+                         "el campo de cobertura de las motos libres\n";
+            bool showHeat = false, showCover = false;
             std::vector<float> heat;
+            std::vector<int> cover;
             std::int64_t frames = 0;
             while (!stop.requested() && (durationMs == 0 || clock.nowMs() < durationMs)) {
                 cv::Mat frame = window.frame();
+                if (showCover) {
+                    if (cover.empty() || frames % 15 == 0) cover = coverageFrom(idleSpots(), nullptr);
+                    drawCoverage(frame, cover, heatGrid, kCoverFar);
+                }
                 if (showHeat) {
                     if (heat.empty() || frames % 15 == 0) heat = demandHeat(clock.nowMs() - 600'000);
                     drawHeatmap(frame, heat, heatGrid);
@@ -330,6 +402,10 @@ int main(int argc, char** argv) {
                     showHeat = !showHeat;
                     heat.clear();
                 }
+                if (window.lastKey() == 'c') {
+                    showCover = !showCover;
+                    cover.clear();
+                }
             }
         } else
 #endif
@@ -339,6 +415,7 @@ int main(int argc, char** argv) {
             stop.wait();
         }
         const bool bySignal = watcher.signalsReceived() > 0;
+        const std::vector<float> idleAtClose = idleSpots();
         stop.request();
 
         generatorThread.join();
@@ -379,6 +456,19 @@ int main(int argc, char** argv) {
                       << (opts.gpuBackend ? "GPU" : "CPU") << "): " << demand.size()
                       << " pedidos; zona de mayor demanda en la fila " << hottest / static_cast<std::size_t>(heatGrid)
                       << ", columna " << hottest % static_cast<std::size_t>(heatGrid) << "\n";
+        }
+        if (idleAtClose.empty()) {
+            std::cerr << "delivery_sim: sin motos libres al cierre, no hay campo de cobertura\n";
+        } else {
+            int sweeps = 0;
+            const std::vector<int> closing = coverageFrom(idleAtClose, &sweeps);
+            const CoverageWorst worst = worstCovered(streetMap, closing);
+            std::cerr << "delivery_sim: campo de cobertura, cuadricula de " << heatGrid << " x " << heatGrid << " ("
+                      << (opts.gpuBackend ? "GPU" : "CPU") << "): " << idleAtClose.size() / 2 << " motos libres al cierre, "
+                      << sweeps << " pasadas; zona peor cubierta en la fila " << worst.cell / static_cast<std::size_t>(heatGrid)
+                      << ", columna " << worst.cell % static_cast<std::size_t>(heatGrid) << ", a " << worst.ms / 1000
+                      << " s de la moto libre mas cercana; " << worst.reached << " celdas con calle cubiertas y "
+                      << worst.unreached << " sin alcanzar\n";
         }
         const std::vector<int> deliveryMs = logger.deliveryTimesMs();
         if (deliveryMs.empty()) {

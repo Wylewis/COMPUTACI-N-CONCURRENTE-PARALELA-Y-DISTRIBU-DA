@@ -67,6 +67,21 @@ int main() {
         drawHeatmap(map, heat, 5);
         check(isColor(map.at<cv::Vec3b>(180, 180), {255, 255, 255}), "una cuadricula que no coincide con los datos se ignora");
     }
+    {
+        cv::Mat map(200, 200, CV_8UC3, cv::Scalar(255, 255, 255));
+        const int far = 1 << 29;
+        std::vector<int> field(16, far);
+        drawCoverage(map, field, 4, far);
+        check(isColor(map.at<cv::Vec3b>(20, 20), {255, 255, 255}), "sin celdas cubiertas el campo de cobertura no pinta nada");
+        field[0] = 0;
+        field[15] = 9000;
+        drawCoverage(map, field, 4, far);
+        const cv::Vec3b near = map.at<cv::Vec3b>(20, 20), distant = map.at<cv::Vec3b>(180, 180);
+        check(near[1] > near[2] && distant[2] > distant[1], "la celda con una moto libre queda verde y la mas lejana roja");
+        check(isColor(map.at<cv::Vec3b>(20, 180), {255, 255, 255}), "una celda sin alcanzar queda como estaba");
+        drawCoverage(map, field, 5, far);
+        check(isColor(map.at<cv::Vec3b>(20, 180), {255, 255, 255}), "un campo que no coincide con la cuadricula se ignora");
+    }
 
     if (failures == 0) {
         std::cout << "fleet_view_test: todas las pruebas pasaron\n";

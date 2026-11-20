@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include <thread>
 
 #include "gpu/argmin_rows.h"
+#include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
 #include "gpu/demand_heatmap.h"
 #include "gpu/eta_batch.h"
@@ -500,6 +502,62 @@ void benchDemandHeatmap(BenchRunner& runner) {
     }
 }
 
+void benchCoverageField(BenchRunner& runner) {
+    for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
+        const std::size_t cells = static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
+        if (!runner.wants(cells)) continue;
+        std::mt19937 rng(static_cast<unsigned>(grid));
+        CoverageMap map;
+        map.grid = grid;
+        map.stepXMs = 7;
+        map.stepYMs = 9;
+        map.open.resize(cells);
+        for (unsigned char& o : map.open) o = rng() % 7u != 0 ? 1 : 0;
+        std::vector<int> seed(cells, kCoverFar);
+        for (std::size_t k = 0; k < std::max<std::size_t>(4, cells / 1024); ++k) seed[rng() % cells] = 0;
+        int sweeps = 0;
+        const std::vector<int> expected = coverageCpu(map, seed.data(), &sweeps);
+        std::cerr << "bench: coverage_field " << grid << "x" << grid << ": " << sweeps << " pasadas hasta converger\n";
+        BenchCase c;
+        c.app = "coverage_field";
+        c.concept = "06_stencil";
+        c.size = std::to_string(grid) + "x" + std::to_string(grid);
+        c.items = cells;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = coverageCpu(map, seed.data()); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = coverageCpuParallel(map, seed.data(), pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuReferences.push_back({"dijkstra", [&] {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = coverageDijkstra(map, seed.data()); });
+            r.correct = out == expected;
+            return r;
+        }});
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = coverageGpu(map, seed.data(), CoverKernel::Basic, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"tiled", [&] {
+            GpuOutcome r;
+            r.correct = coverageGpu(map, seed.data(), CoverKernel::Tiled, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 }
 
 std::vector<BenchApp> benchApps() {
@@ -514,5 +572,6 @@ std::vector<BenchApp> benchApps() {
         {"round_grouped", "09_scan", benchRoundGrouped},
         {"delivery_histogram", "07_histogram", benchDeliveryHistogram},
         {"demand_heatmap", "05_conv", benchDemandHeatmap},
+        {"coverage_field", "06_stencil", benchCoverageField},
     };
 }

@@ -21,6 +21,7 @@
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
 #include "gpu/response_field.h"
+#include "gpu/through_restaurant.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -104,6 +105,53 @@ void benchTravelTable(BenchRunner& runner) {
             r.correct = out == expected;
             return r;
         };
+        runner.run(c);
+    }
+}
+
+void benchThroughRestaurant(BenchRunner& runner) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    const int start = static_cast<int>(runner.graph().nodeIndex(runner.config().fleet.startNode));
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    for (const int wanted : {128, 256, 512, 1024, 2048, 4096}) {
+        if (wanted > city.n) break;
+        const CsrGraph g = prefixSubgraph(city, start, wanted);
+        const std::size_t items = static_cast<std::size_t>(g.n) * static_cast<std::size_t>(g.n);
+        if (!runner.wants(items)) continue;
+        std::mt19937 rng(static_cast<unsigned>(g.n) + 3u);
+        std::vector<int> restaurantNodes(static_cast<std::size_t>(std::min(200, g.n)));
+        for (int& node : restaurantNodes) node = static_cast<int>(rng() % static_cast<unsigned>(g.n));
+        const RestaurantLegs legs = restaurantLegs(travelTableCpuParallel(g, builders), g.n, restaurantNodes);
+        const std::vector<unsigned> expected = throughRestaurantCpu(legs);
+        BenchCase c;
+        c.app = "through_restaurant";
+        c.concept = "03_memory_tiling";
+        c.size = std::to_string(g.n) + "x" + std::to_string(g.n);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = throughRestaurantCpu(legs); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = throughRestaurantCpuParallel(legs, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = throughRestaurantGpu(legs, ThroughKernel::Tiled, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"global", [&] {
+            GpuOutcome r;
+            r.correct = throughRestaurantGpu(legs, ThroughKernel::Global, &r.times) == expected;
+            return r;
+        }});
         runner.run(c);
     }
 }
@@ -814,5 +862,6 @@ std::vector<BenchApp> benchApps() {
         {"restaurant_slots", "07_histogram", benchRestaurantSlots},
         {"demand_trend", "05_conv", benchDemandTrend},
         {"response_field", "06_stencil", benchResponseField},
+        {"through_restaurant", "03_memory_tiling", benchThroughRestaurant},
     };
 }

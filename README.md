@@ -381,6 +381,7 @@ las versiones de CPU.
 | Pedidos por restaurante y franja horaria | 07, histograma | El resumen final de la simulación | `src/gpu/restaurant_slots.*` |
 | Tendencia de la demanda | 05, convolución | El resumen final de la simulación | `src/gpu/demand_trend.*` |
 | Campo de respuesta con motos ocupadas | 06, stencil | El resumen final de la simulación | `src/gpu/response_field.*` |
+| Restaurante mejor ubicado | 03, tiling y memoria compartida | Al arrancar, después de la tabla de tiempos | `src/gpu/through_restaurant.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -469,6 +470,13 @@ En GPU hay un kernel que hace 8 pasadas por lanzamiento: cada bloque carga en sh
 tile de 16 por 16 con un borde de 8 celdas, hace las 8 pasadas ahí y escribe solo las celdas de
 adentro. Se compara con el kernel de una pasada por lanzamiento. Al terminar, el programa informa
 la zona peor atendida.
+
+El restaurante mejor ubicado sale de buscar, para cada par de esquinas, el restaurante que hace
+más corto el viaje de una a la otra pasando por él, y contar cuántos pares gana cada uno. Es un
+producto de matrices con mínimo y suma: los tiempos de cada esquina a cada restaurante por los de
+cada restaurante a cada esquina, tomados de la tabla de tiempos. En GPU hay un kernel con tiles
+en shared memory y otro que lee de memoria global, y el conteo se hace en la tarjeta, así que
+solo baja un contador por restaurante. Es la aplicación en la que la GPU gana de punta a punta.
 
 ### Configuración de ciudad
 

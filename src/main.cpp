@@ -28,6 +28,7 @@
 #include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
 #include "gpu/response_field.h"
+#include "gpu/through_restaurant.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -313,6 +314,21 @@ int main(int argc, char** argv) {
         }
 
         clock.start();
+        if (!config.restaurants.empty() && !travel.empty()) {
+            std::vector<int> restaurantNodes;
+            for (const RestaurantConfig& r : config.restaurants) restaurantNodes.push_back(static_cast<int>(graph.nodeIndex(r.node)));
+            const RestaurantLegs legs = restaurantLegs(travel.data(), travel.size(), restaurantNodes);
+            const std::vector<unsigned> wins =
+                opts.gpuBackend ? gpuWorker.submit([&legs] { return throughRestaurantGpu(legs); }).get()
+                                : throughRestaurantCpuParallel(legs, estimators);
+            const std::size_t top = bestPlaced(wins);
+            unsigned long long pairs = 0;
+            for (const unsigned w : wins) pairs += w;
+            std::cerr << "delivery_sim: restaurante mejor ubicado (" << (opts.gpuBackend ? "GPU" : "CPU") << "): "
+                      << config.restaurants[top].id << ", queda de paso en " << wins[top] << " de " << pairs
+                      << " viajes entre esquinas (" << (pairs > 0 ? 100ULL * wins[top] / pairs : 0ULL) << " %), entre "
+                      << config.restaurants.size() << " restaurantes\n";
+        }
         fleet.start();
         for (auto& d : dispatchers) d->start();
         DemandLog demand;

@@ -6,6 +6,7 @@
 #include "delivery_histogram.h"
 #include "delivery_kpis.h"
 #include "demand_heatmap.h"
+#include "demand_trend.h"
 #include "eta_batch.h"
 #include "group_orders.h"
 #include "restaurant_slots.h"
@@ -22,5 +23,6 @@ std::vector<GpuKernelInfo> gpuKernelInfos() {
     for (const GpuKernelInfo& k : deliveryKpisKernelInfos()) all.push_back(k);
     for (const GpuKernelInfo& k : backlogCurveKernelInfos()) all.push_back(k);
     for (const GpuKernelInfo& k : restaurantSlotsKernelInfos()) all.push_back(k);
+    for (const GpuKernelInfo& k : demandTrendKernelInfos()) all.push_back(k);
     return all;
 }

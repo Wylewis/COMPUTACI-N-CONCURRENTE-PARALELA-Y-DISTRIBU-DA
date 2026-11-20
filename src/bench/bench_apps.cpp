@@ -16,6 +16,7 @@
 #include "gpu/delivery_histogram.h"
 #include "gpu/delivery_kpis.h"
 #include "gpu/demand_heatmap.h"
+#include "gpu/demand_trend.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
@@ -645,6 +646,47 @@ void benchDemandHeatmap(BenchRunner& runner) {
     }
 }
 
+void benchDemandTrend(BenchRunner& runner) {
+    const std::vector<float> weights = trendWeights();
+    for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
+        if (!runner.wants(n)) continue;
+        std::mt19937 rng(static_cast<unsigned>(n) + 5u);
+        std::vector<float> counts(n);
+        for (float& c : counts) c = static_cast<float>(rng() % 24u);
+        const std::vector<float> expected = trendCpu(counts.data(), n, weights.data());
+        BenchCase c;
+        c.app = "demand_trend";
+        c.concept = "05_conv";
+        c.size = std::to_string(n);
+        c.items = n;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<float> out;
+            r.ms = timeMs([&] { out = trendCpu(counts.data(), n, weights.data()); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<float> out;
+            r.ms = timeMs([&] { out = trendCpuParallel(counts.data(), n, weights.data(), pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = trendsMatch(expected, trendGpu(counts.data(), n, weights.data(), TrendKernel::Global, &r.times));
+            return r;
+        };
+        c.gpuVariants.push_back({"tiled", [&] {
+            GpuOutcome r;
+            r.correct = trendsMatch(expected, trendGpu(counts.data(), n, weights.data(), TrendKernel::Tiled, &r.times));
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 void benchCoverageField(BenchRunner& runner) {
     for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
         const std::size_t cells = static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
@@ -719,5 +761,6 @@ std::vector<BenchApp> benchApps() {
         {"delivery_kpis", "08_reduction", benchDeliveryKpis},
         {"backlog_curve", "09_scan", benchBacklogCurve},
         {"restaurant_slots", "07_histogram", benchRestaurantSlots},
+        {"demand_trend", "05_conv", benchDemandTrend},
     };
 }

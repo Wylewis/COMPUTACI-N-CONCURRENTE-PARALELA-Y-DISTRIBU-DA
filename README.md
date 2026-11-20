@@ -379,6 +379,7 @@ las versiones de CPU.
 | Indicadores de entrega | 08, reducción | El resumen final de la simulación | `src/gpu/delivery_kpis.*` |
 | Curva de pedidos en espera | 09, scan | El resumen final de la simulación | `src/gpu/backlog_curve.*` |
 | Pedidos por restaurante y franja horaria | 07, histograma | El resumen final de la simulación | `src/gpu/restaurant_slots.*` |
+| Tendencia de la demanda | 05, convolución | El resumen final de la simulación | `src/gpu/demand_trend.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -452,6 +453,13 @@ contadores para darle una copia a cada bloque en shared memory, así que en GPU 
 atómicos directamente en la tabla global, con lectura intercalada. Un segundo kernel junta los
 pedidos seguidos que caen en el mismo contador antes de sumar, para comparar. Al terminar, el
 programa imprime el restaurante y la franja con más pedidos.
+
+La tendencia de la demanda suaviza en el tiempo la cantidad de pedidos por minuto: cada minuto
+pasa a ser un promedio ponderado de él y de los siete de cada lado, una convolución de una
+dimensión con 15 pesos gaussianos en memoria constante. En GPU hay dos kernels: uno lee los
+vecinos de memoria global y otro carga antes un tile de 256 valores con su borde en shared memory.
+Al terminar, el programa imprime el pico sostenido de la demanda y, para comparar, el minuto
+suelto más cargado.
 
 ### Configuración de ciudad
 

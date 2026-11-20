@@ -86,6 +86,7 @@ set(GPU_SOURCES
   src/gpu/delivery_kpis.cu
   src/gpu/backlog_curve.cu
   src/gpu/restaurant_slots.cu
+  src/gpu/demand_trend.cu
 )
 if(USE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
@@ -113,6 +114,7 @@ add_library(delivery_gpu STATIC ${GPU_SOURCES}
   src/gpu/delivery_kpis_cpu.cpp
   src/gpu/backlog_curve_cpu.cpp
   src/gpu/restaurant_slots_cpu.cpp
+  src/gpu/demand_trend_cpu.cpp
   src/thread_pool.cpp
 )
 target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
@@ -184,6 +186,7 @@ add_gpu_test(coverage_field_test)
 add_gpu_test(delivery_kpis_test)
 add_gpu_test(backlog_curve_test)
 add_gpu_test(restaurant_slots_test)
+add_gpu_test(demand_trend_test)
 add_gpu_test(eta_service_test
   src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp
   src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp

@@ -22,6 +22,7 @@
 #include "gpu/delivery_histogram.h"
 #include "gpu/delivery_kpis.h"
 #include "gpu/demand_heatmap.h"
+#include "gpu/demand_trend.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
@@ -542,6 +543,23 @@ int main(int argc, char** argv) {
                       << " pedidos; la celda mas cargada es " << restaurantNames[static_cast<std::size_t>(busiest.restaurant)]
                       << " entre el minuto " << busiest.slot * 10 << " y el " << busiest.slot * 10 + 10 << ", con "
                       << busiest.orders << " pedidos\n";
+        }
+        const std::vector<float> perMinute = ordersPerSlot(logger.createdTimesMs());
+        if (perMinute.empty()) {
+            std::cerr << "delivery_sim: sin pedidos, no hay tendencia de la demanda\n";
+        } else {
+            const std::vector<float> trendFilter = trendWeights();
+            const std::vector<float> trend =
+                opts.gpuBackend ? gpuWorker.submit([&perMinute, &trendFilter] {
+                                               return trendGpu(perMinute.data(), perMinute.size(), trendFilter.data());
+                                           }).get()
+                                : trendCpu(perMinute.data(), perMinute.size(), trendFilter.data());
+            const std::size_t sustained = trendPeak(trend);
+            const std::size_t rawPeak = trendPeak(perMinute);
+            std::cerr << "delivery_sim: tendencia de la demanda, un tramo por minuto (" << (opts.gpuBackend ? "GPU" : "CPU")
+                      << "): " << perMinute.size() << " minutos; pico sostenido de " << std::lround(trend[sustained] * 10.0f) / 10.0
+                      << " pedidos por minuto alrededor del minuto " << sustained << "; sin suavizar, el minuto mas cargado fue el "
+                      << rawPeak << " con " << std::lround(perMinute[rawPeak]) << " pedidos\n";
         }
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;

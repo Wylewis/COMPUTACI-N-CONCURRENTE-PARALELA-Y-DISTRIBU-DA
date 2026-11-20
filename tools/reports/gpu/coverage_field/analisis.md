@@ -31,7 +31,8 @@ Siete cuadrículas, de 64 × 64 a 4096 × 4096: de 4096 a 16,8 millones de celda
 la que usa el programa. En todas, una de cada siete celdas no tiene calle y hay una moto libre
 cada 1024 celdas, así que la cantidad de pasadas casi no depende del tamaño: entre 60 y 94. Una
 corrida de calentamiento y 10 medidas intercaladas, con la tarjeta despierta antes de cada medida
-de GPU.
+de GPU. El tiempo de punta a punta de la GPU cuenta también la reserva del arreglo de salida en
+la CPU, igual que las versiones de CPU.
 
 ## Diseño
 
@@ -82,45 +83,47 @@ Medianas en ms. La tabla completa está en `tabla.md`.
 
 | Cuadrícula | Pasadas | CPU 1 hilo, laptop | CPU 18 hilos, laptop | GPU kernel | GPU punta a punta | Kernel contra la mejor CPU | Punta a punta contra la mejor CPU |
 |---|---|---|---|---|---|---|---|
-| 64 × 64 | 60 | 0,051 | 2,304 | 0,859 | 1,547 | 0,06x | 0,03x |
-| 128 × 128 | 77 | 0,252 | 3,117 | 0,992 | 1,740 | 0,25x | 0,14x |
-| 256 × 256 | 76 | 0,902 | 3,515 | 1,003 | 1,843 | 0,90x | 0,49x |
-| 512 × 512 | 75 | 3,495 | 3,889 | 1,124 | 2,702 | 1,67x | 0,69x |
-| 1024 × 1024 | 92 | 17,3 | 6,432 | 3,219 | 5,990 | 1,76x | 0,94x |
-| 2048 × 2048 | 88 | 76,7 | 15,7 | 10,7 | 18,1 | 1,47x | 0,87x |
-| 4096 × 4096 | 94 | 372,7 | 80,0 | 41,2 | 65,8 | 1,94x | 1,22x |
+| 64 × 64 | 60 | 0,051 | 2,304 | 0,839 | 1,617 | 0,06x | 0,03x |
+| 128 × 128 | 77 | 0,252 | 3,117 | 1,010 | 1,669 | 0,25x | 0,15x |
+| 256 × 256 | 76 | 0,902 | 3,515 | 1,006 | 1,756 | 0,90x | 0,51x |
+| 512 × 512 | 75 | 3,495 | 3,889 | 1,088 | 2,674 | 1,72x | 0,70x |
+| 1024 × 1024 | 92 | 17,3 | 6,432 | 3,219 | 6,486 | 1,76x | 0,87x |
+| 2048 × 2048 | 88 | 76,7 | 15,7 | 10,9 | 20,3 | 1,44x | 0,78x |
+| 4096 × 4096 | 94 | 372,7 | 80,0 | 41,2 | 110,5 | 1,94x | 0,72x |
 
 ![Tiempo contra tamaño](tiempo.png)
 
-- **Es el primer experimento en que la tarjeta gana con claridad de punta a punta contra la
-  laptop** (las rondas de despacho llegaban a un empate): en 4096 × 4096 la tarjeta tarda
-  65,8 ms con copias incluidas y los 18 hilos de la laptop 80,0 ms, 1,22 veces. En 1024 × 1024
-  y 2048 × 2048 casi empatan (0,94 y 0,87 veces) y por debajo gana la laptop.
-- **El kernel gana desde 512 × 512**, entre 1,5 y 1,9 veces. Es poca ventaja comparada con la
+- **De punta a punta no hay cruce contra la laptop, pero es de las aplicaciones que más se
+  acercan**: 0,87 veces en 1024 × 1024, 0,78 en 2048 × 2048 y 0,72 en 4096 × 4096, donde la
+  tarjeta tarda 110,5 ms y los 18 hilos de la laptop 80,0 ms.
+- **El kernel gana desde 512 × 512**, entre 1,4 y 1,9 veces. Es poca ventaja comparada con la
   convolución, porque aquí cada celda hace muy poco cálculo: cinco lecturas y tres comparaciones.
 - **Con cuadrículas chicas el kernel no baja de 1 ms.** Son entre 64 y 96 pasadas, cada una un
   lanzamiento, y cada uno cuesta unos 13 microsegundos aunque la cuadrícula sea mínima. La
-  laptop con un hilo resuelve 64 × 64 en 0,05 ms, 17 veces más rápido que el kernel solo.
+  laptop con un hilo resuelve 64 × 64 en 0,05 ms, 16 veces más rápido que el kernel solo.
 
 ### Misma máquina
 
 | Cuadrícula | CPU 1 hilo, PC | CPU 16 hilos, PC | GPU kernel | GPU punta a punta | Punta a punta contra la mejor CPU de la PC | Parte del kernel en la punta a punta |
 |---|---|---|---|---|---|---|
-| 64 × 64 | 0,262 | 17,7 | 0,859 | 1,547 | 0,17x | 56 % |
-| 128 × 128 | 1,127 | 22,5 | 0,992 | 1,740 | 0,65x | 57 % |
-| 256 × 256 | 4,044 | 22,9 | 1,003 | 1,843 | 2,19x | 54 % |
-| 512 × 512 | 15,5 | 24,8 | 1,124 | 2,702 | 4,66x | 42 % |
-| 1024 × 1024 | 74,9 | 42,2 | 3,219 | 5,990 | 5,93x | 54 % |
-| 2048 × 2048 | 316,1 | 177,6 | 10,7 | 18,1 | 9,28x | 59 % |
-| 4096 × 4096 | 1388,0 | 925,9 | 41,2 | 65,8 | 13,45x | 63 % |
+| 64 × 64 | 0,263 | 17,9 | 0,839 | 1,617 | 0,16x | 52 % |
+| 128 × 128 | 1,109 | 22,2 | 1,010 | 1,669 | 0,66x | 60 % |
+| 256 × 256 | 3,940 | 22,5 | 1,006 | 1,756 | 2,24x | 57 % |
+| 512 × 512 | 14,9 | 23,8 | 1,088 | 2,674 | 4,61x | 41 % |
+| 1024 × 1024 | 73,5 | 42,3 | 3,219 | 6,486 | 5,23x | 50 % |
+| 2048 × 2048 | 328,7 | 171,5 | 10,9 | 20,3 | 7,77x | 54 % |
+| 4096 × 4096 | 1392,6 | 936,9 | 41,2 | 110,5 | 8,14x | 37 % |
 
 ![Reparto del tiempo de GPU](copias.png)
 
-- **Contra la CPU de su propia máquina el cruce está en 256 × 256** y la ventaja llega a 13,5
+- **Contra la CPU de su propia máquina el cruce está en 256 × 256** y la ventaja llega a 8,1
   veces en 4096 × 4096.
-- **El kernel es entre el 42 y el 63 % del tiempo de punta a punta.** En las aplicaciones de un
+- **El kernel es entre el 37 y el 60 % del tiempo de punta a punta.** En las aplicaciones de un
   solo lanzamiento era menos del 10 %. La diferencia es que aquí los datos suben una vez y se
-  usan en unas 90 pasadas: las copias se reparten entre todas. Por eso este experimento sí cruza.
+  usan en unas 90 pasadas: las copias se reparten entre todas.
+- **En 4096 × 4096 la parte del kernel baja al 37 %.** De 2048 × 2048 a 4096 × 4096 el kernel se
+  cuadruplica, de 10,9 a 41,2 ms, pero la punta a punta se quintuplica, de 20,3 a 110,5 ms: lo
+  que crece de más es reservar y copiar los 64 MB del resultado.
 - `nsys` sobre una corrida de todas las cuadrículas: 1259 lanzamientos de kernel con una mediana
   de 9 microsegundos cada uno, y el tiempo grande sigue en `cudaMemcpy` y `cudaMalloc`.
 
@@ -128,13 +131,13 @@ Medianas en ms. La tabla completa está en `tabla.md`.
 
 | Cuadrícula | Kernel sin tiles | Kernel con tiles | Con tiles contra sin tiles | Sin tiles, microsegundos por pasada | Sin tiles, nanosegundos por celda y pasada |
 |---|---|---|---|---|---|
-| 64 × 64 | 0,859 | 0,806 | 1,07x | 13,4 | 3,277 |
-| 128 × 128 | 0,992 | 0,965 | 1,03x | 12,4 | 0,757 |
-| 256 × 256 | 1,003 | 0,954 | 1,05x | 12,5 | 0,191 |
-| 512 × 512 | 1,124 | 1,196 | 0,94x | 14,1 | 0,054 |
-| 1024 × 1024 | 3,219 | 4,154 | 0,77x | 33,5 | 0,032 |
-| 2048 × 2048 | 10,7 | 14,1 | 0,76x | 111,7 | 0,027 |
-| 4096 × 4096 | 41,2 | 55,4 | 0,74x | 429,6 | 0,026 |
+| 64 × 64 | 0,839 | 0,826 | 1,02x | 13,1 | 3,200 |
+| 128 × 128 | 1,010 | 1,027 | 0,98x | 12,6 | 0,770 |
+| 256 × 256 | 1,006 | 0,997 | 1,01x | 12,6 | 0,192 |
+| 512 × 512 | 1,088 | 1,183 | 0,92x | 13,6 | 0,052 |
+| 1024 × 1024 | 3,219 | 4,156 | 0,77x | 33,5 | 0,032 |
+| 2048 × 2048 | 10,9 | 14,2 | 0,77x | 113,6 | 0,027 |
+| 4096 × 4096 | 41,2 | 56,0 | 0,74x | 429,0 | 0,026 |
 
 - **Los tiles no ayudan en este stencil; desde 1024 × 1024 lo hacen un 25 % más lento.**
 - **Por qué.** Sin tiles cada celda lee cinco valores de memoria global, pero los hilos vecinos
@@ -182,12 +185,23 @@ vez, así que hace menos trabajo. Se midió en un hilo, como referencia (`cpu_re
 ## Veredicto
 
 **En el programa, CPU con un hilo.** Con la cuadrícula de 64 × 64 un hilo tarda 0,05 ms y la
-tarjeta 1,5 ms: son tan pocas celdas que manda el costo fijo de cada lanzamiento.
+tarjeta 1,6 ms: son tan pocas celdas que manda el costo fijo de cada lanzamiento.
 
-**Con cuadrículas grandes, GPU.** Desde 4096 × 4096 la tarjeta gana de punta a punta incluso a los
-18 hilos de la laptop, y contra la CPU de su propia máquina gana desde 256 × 256. Es la
-primera aplicación medida en la que la tarjeta gana con claridad con las copias incluidas, y la
-razón es que el trabajo es iterativo: se sube una vez y se calcula muchas.
+**Con cuadrículas grandes, depende de contra qué CPU.** Contra la CPU de su propia máquina la
+tarjeta gana de punta a punta desde 256 × 256 y hasta 8 veces. Contra los 18 hilos de la laptop
+no llega a ganar: queda entre 0,7 y 0,9 veces desde 1024 × 1024, aunque el kernel solo es hasta
+1,9 veces más rápido. Es de las aplicaciones que más se acercan, y la razón es que el trabajo es
+iterativo: se sube una vez y se calcula muchas.
 
 **Sin tiles.** Para un stencil de cinco puntos en dos dimensiones, cargar el tile en shared memory
 cuesta más de lo que ahorra.
+
+## Amenazas a la validez
+
+- **Dos máquinas.** El veredicto contra la laptop compara una CPU mucho más rápida que la de la
+  PC. Por eso se informa también la comparación en la misma máquina.
+- **La reserva de memoria pesa mucho en la PC.** En 4096 × 4096, reservar los 64 MB del resultado
+  dentro del contenedor sobre WSL2 cuesta decenas de milisegundos. En otra instalación ese costo
+  sería menor y la punta a punta quedaría más cerca de la laptop.
+- **Una sola forma de repartir las motos.** Con una moto libre cada 1024 celdas el campo converge
+  en menos de 100 pasadas. Con menos motos harían falta más pasadas y cambiarían todas las cifras.

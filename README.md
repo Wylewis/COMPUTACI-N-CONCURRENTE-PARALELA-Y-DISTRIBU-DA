@@ -339,6 +339,11 @@ multihilo con 1, 2, 4... hilos), `--bench-threads <n>`, `--bench-apps <a,b>` y
 emulación (`USE_CUDA` apagado) el CSV trae solo las de CPU, porque los tiempos de la emulación no
 dicen nada de una GPU.
 
+Una tarjeta que queda sin trabajo baja de frecuencia, y eso pasa dentro de cada repetición
+mientras corren las versiones de CPU. Por eso, justo antes de cada medida de GPU, el medidor
+lanza un kernel de referencia hasta que su tiempo vuelve al mejor que le conoce: la medida se
+toma con la tarjeta a régimen. Con `--bench-cold` no la despierta y mide como la encuentra.
+
 Para compilar con una GPU NVIDIA: `cmake -DUSE_CUDA=ON .. && make`. Todo kernel se lanza desde un
 único hilo dueño de la GPU (`src/gpu/gpu_worker`); los demás hilos le envían trabajo por una cola y
 esperan el resultado por un `future`.

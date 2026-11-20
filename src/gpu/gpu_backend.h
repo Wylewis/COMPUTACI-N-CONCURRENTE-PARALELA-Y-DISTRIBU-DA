@@ -21,3 +21,10 @@ GpuDeviceInfo gpuDeviceInfo();
 GpuTimes gpuVectorAdd(const int* a, const int* b, int* out, int n);
 
 bool gpuSelfTest(int n);
+
+struct GpuWake {
+    double spentMs = 0.0;
+    bool steady = true;
+};
+
+GpuWake gpuWake(double capMs = 1500.0);

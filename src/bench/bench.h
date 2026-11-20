@@ -23,6 +23,7 @@ struct BenchOptions {
     bool sweep = false;
     unsigned threads = 0;
     std::size_t maxItems = 0;
+    bool wake = true;
     std::vector<std::string> apps;
 };
 
@@ -59,10 +60,14 @@ public:
     void run(const BenchCase& c);
 
     std::size_t rows() const { return rows_; }
+    std::size_t wakes() const { return wakes_; }
+    std::size_t unsteadyWakes() const { return unsteadyWakes_; }
+    double wakeMs() const { return wakeMs_; }
     std::size_t wrong() const { return wrong_; }
 
 private:
     ThreadPool& poolOf(unsigned threads);
+    GpuOutcome onDevice(const std::function<GpuOutcome()>& measured);
     void row(const BenchCase& c, const std::string& version, unsigned threads, int rep, double ms, bool correct);
 
     const BenchOptions options_;
@@ -74,6 +79,9 @@ private:
     std::vector<unsigned> threadCounts_;
     std::map<unsigned, std::unique_ptr<ThreadPool>> pools_;
     std::size_t rows_ = 0;
+    std::size_t wakes_ = 0;
+    std::size_t unsteadyWakes_ = 0;
+    double wakeMs_ = 0.0;
     std::size_t wrong_ = 0;
 };
 

@@ -49,7 +49,8 @@ void printUsage(std::ostream& out) {
            "                    [--estimator serial|async|pool|table|gpu]\n"
            "       delivery_sim <config.json> --gpu-info\n"
            "       delivery_sim <config.json> --headless --bench <resultados.csv> [--bench-once] [--bench-reps <n>]\n"
-           "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n";
+           "                    [--bench-apps <a,b,...>] [--bench-sweep] [--bench-threads <n>] [--bench-max-items <n>]\n"
+           "                    [--bench-cold]\n";
 }
 
 std::vector<std::string> splitCommas(const std::string& text) {
@@ -118,6 +119,8 @@ bool parseArgs(int argc, char** argv, Options& opts, std::string& error) {
             opts.benchOptions.once = true;
         } else if (arg == "--bench-sweep") {
             opts.benchOptions.sweep = true;
+        } else if (arg == "--bench-cold") {
+            opts.benchOptions.wake = false;
         } else if (arg == "--bench-apps") {
             if (i + 1 >= argc) {
                 error = "--bench-apps requiere una lista separada por comas";

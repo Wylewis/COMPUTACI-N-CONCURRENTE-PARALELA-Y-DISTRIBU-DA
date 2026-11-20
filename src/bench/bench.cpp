@@ -5,6 +5,9 @@
 #include <iomanip>
 #include <iostream>
 #include <thread>
+#include <utility>
+
+#include "gpu/gpu_backend.h"
 
 BenchRunner::BenchRunner(const BenchOptions& options, const Config& config, const Graph& graph, GpuWorker& gpuWorker,
                          bool realGpu, std::ostream& csv)
@@ -32,6 +35,18 @@ void BenchRunner::row(const BenchCase& c, const std::string& version, unsigned t
     if (!correct) ++wrong_;
 }
 
+GpuOutcome BenchRunner::onDevice(const std::function<GpuOutcome()>& measured) {
+    if (!options_.wake || options_.once) return gpuWorker_.submit(measured).get();
+    const std::pair<GpuWake, GpuOutcome> r = gpuWorker_.submit([&measured] {
+        const GpuWake wake = gpuWake();
+        return std::make_pair(wake, measured());
+    }).get();
+    ++wakes_;
+    wakeMs_ += r.first.spentMs;
+    if (!r.first.steady) ++unsteadyWakes_;
+    return r.second;
+}
+
 void BenchRunner::run(const BenchCase& c) {
     if (!wants(c.items)) return;
     const bool withGpu = realGpu_ && c.gpu;
@@ -56,13 +71,13 @@ void BenchRunner::run(const BenchCase& c) {
             }
         }
         if (withGpu) {
-            const GpuOutcome r = gpuWorker_.submit(c.gpu).get();
+            const GpuOutcome r = onDevice(c.gpu);
             row(c, "gpu_kernel", 0, rep, r.times.kernelMs, r.correct);
             row(c, "gpu_e2e", 0, rep, r.times.totalMs, r.correct);
         }
         if (realGpu_) {
             for (const auto& variant : c.gpuVariants) {
-                const GpuOutcome r = gpuWorker_.submit(variant.second).get();
+                const GpuOutcome r = onDevice(variant.second);
                 row(c, "gpu_kernel_" + variant.first, 0, rep, r.times.kernelMs, r.correct);
                 row(c, "gpu_e2e_" + variant.first, 0, rep, r.times.totalMs, r.correct);
             }
@@ -94,6 +109,9 @@ int runBenchmarks(const BenchOptions& options, const Config& config, const Graph
                               std::find(options.apps.begin(), options.apps.end(), app.name) != options.apps.end();
         if (selected) app.run(runner);
     }
+    if (runner.wakes() > 0)
+        std::cerr << "bench: tarjeta despertada antes de " << runner.wakes() << " medidas de GPU, " << runner.wakeMs()
+                  << " ms en total, " << runner.unsteadyWakes() << " sin llegar a regimen\n";
     std::cerr << "bench: " << runner.rows() << " filas en " << options.csvPath << ", " << runner.wrong()
               << " con resultado incorrecto\n";
     return runner.wrong() == 0 ? 0 : 1;

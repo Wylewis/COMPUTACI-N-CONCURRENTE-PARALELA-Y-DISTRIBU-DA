@@ -53,6 +53,46 @@ GpuTimes gpuVectorAdd(const int* a, const int* b, int* out, int n) {
     return times;
 }
 
+GpuWake gpuWake(double capMs) {
+    GpuWake wake;
+    if (!BY_BACKEND(true, false)) return wake;
+    static int *a = nullptr, *b = nullptr, *out = nullptr;
+    static double best = 0.0;
+    const int n = 1 << 22;
+    const std::size_t bytes = static_cast<std::size_t>(n) * sizeof(int);
+    const bool first = a == nullptr;
+    if (first) {
+        CHECK(cudaMalloc(&a, bytes));
+        CHECK(cudaMalloc(&b, bytes));
+        CHECK(cudaMalloc(&out, bytes));
+        CHECK(cudaMemset(a, 0, bytes));
+        CHECK(cudaMemset(b, 0, bytes));
+    }
+    const unsigned block = 256;
+    const double calibrationMs = 1000.0;
+    Timer spent;
+    int inRegime = 0;
+    wake.steady = false;
+    while (spent.ms() < capMs) {
+        double ms = 0.0;
+        {
+            DeviceTimer kernel;
+            launch(selfTestKernel, dim3(cdiv(static_cast<unsigned>(n), block)), dim3(block), static_cast<const int*>(a),
+                   static_cast<const int*>(b), out, n);
+            CHECK(cudaGetLastError());
+            ms = kernel.ms();
+        }
+        if (best == 0.0 || ms < best) best = ms;
+        inRegime = ms <= 1.25 * best ? inRegime + 1 : 0;
+        if (inRegime >= 3 && (!first || spent.ms() >= calibrationMs)) {
+            wake.steady = true;
+            break;
+        }
+    }
+    wake.spentMs = spent.ms();
+    return wake;
+}
+
 bool gpuSelfTest(int n) {
     if (n <= 0) return true;
     std::vector<int> a(static_cast<std::size_t>(n)), b(a.size()), out(a.size(), -1);

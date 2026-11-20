@@ -28,6 +28,7 @@
 #include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
 #include "gpu/response_field.h"
+#include "gpu/round_trip_reach.h"
 #include "gpu/through_restaurant.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
@@ -327,6 +328,18 @@ int main(int argc, char** argv) {
                       << config.restaurants[top].id << ", queda de paso en " << wins[top] << " de " << pairs
                       << " viajes entre esquinas (" << (pairs > 0 ? 100ULL * wins[top] / pairs : 0ULL) << " %), entre "
                       << config.restaurants.size() << " restaurantes\n";
+        }
+        if (!travel.empty()) {
+            const std::vector<int> turned = turnedTable(travel.data(), travel.size());
+            const std::vector<unsigned> reach =
+                opts.gpuBackend ? gpuWorker.submit([&travel, &turned] {
+                                               return roundTripReachGpu(travel.data().data(), turned.data(), travel.size());
+                                           }).get()
+                                : roundTripReachCpuParallel(travel.data().data(), turned.data(), travel.size(), estimators);
+            const std::size_t site = widestReach(reach);
+            std::cerr << "delivery_sim: mejor esquina para un restaurante nuevo (" << (opts.gpuBackend ? "GPU" : "CPU") << "): "
+                      << graph.nodeAt(site).id << ", con " << reach[site] << " de " << travel.size()
+                      << " esquinas a menos de " << kRoundTripLimitMs / 60'000 << " minutos ida y vuelta\n";
         }
         clock.start();
         fleet.start();

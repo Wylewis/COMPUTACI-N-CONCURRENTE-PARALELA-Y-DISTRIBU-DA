@@ -21,6 +21,7 @@
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
 #include "gpu/response_field.h"
+#include "gpu/round_trip_reach.h"
 #include "gpu/through_restaurant.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
@@ -150,6 +151,65 @@ void benchThroughRestaurant(BenchRunner& runner) {
         c.gpuVariants.push_back({"global", [&] {
             GpuOutcome r;
             r.correct = throughRestaurantGpu(legs, ThroughKernel::Global, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
+void benchRoundTripReach(BenchRunner& runner) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    const int start = static_cast<int>(runner.graph().nodeIndex(runner.config().fleet.startNode));
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    for (const int wanted : {128, 256, 512, 1024, 2048, 4096}) {
+        if (wanted > city.n) break;
+        const CsrGraph g = prefixSubgraph(city, start, wanted);
+        const std::size_t items = static_cast<std::size_t>(g.n) * static_cast<std::size_t>(g.n);
+        if (!runner.wants(items)) continue;
+        const std::vector<int> table = travelTableCpuParallel(g, builders);
+        const std::vector<int> turned = turnedTable(table, g.n);
+        const std::vector<unsigned> expected = roundTripReachCpuColumn(table.data(), g.n);
+        BenchCase c;
+        c.app = "round_trip_reach";
+        c.concept = "04_performance";
+        c.size = std::to_string(g.n) + "x" + std::to_string(g.n);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = roundTripReachCpu(table.data(), turned.data(), g.n); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = roundTripReachCpuParallel(table.data(), turned.data(), g.n, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuReferences.push_back({"column", [&] {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = roundTripReachCpuColumn(table.data(), g.n); });
+            r.correct = out == expected;
+            return r;
+        }});
+        c.cpuReferences.push_back({"turn", [&] {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = turnedTable(table, g.n); });
+            r.correct = out == turned;
+            return r;
+        }});
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = roundTripReachGpu(table.data(), turned.data(), g.n, RoundTripLayout::Turned, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"column", [&] {
+            GpuOutcome r;
+            r.correct = roundTripReachGpu(table.data(), nullptr, g.n, RoundTripLayout::Column, &r.times) == expected;
             return r;
         }});
         runner.run(c);
@@ -863,5 +923,6 @@ std::vector<BenchApp> benchApps() {
         {"demand_trend", "05_conv", benchDemandTrend},
         {"response_field", "06_stencil", benchResponseField},
         {"through_restaurant", "03_memory_tiling", benchThroughRestaurant},
+        {"round_trip_reach", "04_performance", benchRoundTripReach},
     };
 }

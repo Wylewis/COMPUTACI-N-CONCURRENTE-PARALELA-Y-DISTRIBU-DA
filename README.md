@@ -382,6 +382,7 @@ las versiones de CPU.
 | Tendencia de la demanda | 05, convolución | El resumen final de la simulación | `src/gpu/demand_trend.*` |
 | Campo de respuesta con motos ocupadas | 06, stencil | El resumen final de la simulación | `src/gpu/response_field.*` |
 | Restaurante mejor ubicado | 03, tiling y memoria compartida | Al arrancar, después de la tabla de tiempos | `src/gpu/through_restaurant.*` |
+| Mejor esquina para un restaurante nuevo | 04, accesos agrupados y corner turning | Al arrancar, después de la tabla de tiempos | `src/gpu/round_trip_reach.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -477,6 +478,12 @@ producto de matrices con mínimo y suma: los tiempos de cada esquina a cada rest
 cada restaurante a cada esquina, tomados de la tabla de tiempos. En GPU hay un kernel con tiles
 en shared memory y otro que lee de memoria global, y el conteo se hace en la tarjeta, así que
 solo baja un contador por restaurante. Es la aplicación en la que la GPU gana de punta a punta.
+
+La mejor esquina para un restaurante nuevo es la que alcanza más esquinas ida y vuelta en menos
+de 10 minutos. La ida se lee de una fila de la tabla de tiempos y la vuelta de una columna, que
+en memoria queda salteada. Para leerla seguida se guarda una copia girada de la tabla, con las
+columnas como filas. En GPU hay un kernel que usa la copia girada y otro que lee la columna
+directamente, para medir cuánto aporta el giro.
 
 ### Configuración de ciudad
 

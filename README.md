@@ -377,6 +377,7 @@ las versiones de CPU.
 | Mapa de calor de demanda | 05, convolución | Una capa sobre el mapa en la ventana (tecla `h`) y el resumen final | `src/gpu/demand_heatmap.*` |
 | Campo de cobertura de las motos libres | 06, stencil | Otra capa sobre el mapa en la ventana (tecla `c`) y el resumen final | `src/gpu/coverage_field.*` |
 | Indicadores de entrega | 08, reducción | El resumen final de la simulación | `src/gpu/delivery_kpis.*` |
+| Curva de pedidos en espera | 09, scan | El resumen final de la simulación | `src/gpu/backlog_curve.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -435,6 +436,14 @@ cada hilo reduce primero 64 entregas en sus registros, el bloque combina los 256
 árbol en shared memory, y un segundo kernel reduce los parciales de los bloques hasta que queda
 uno. Son enteros, así que la tarjeta y la CPU dan exactamente lo mismo. Al terminar, el programa
 imprime el promedio, la entrega más lenta y cuántas pasaron de 45 minutos.
+
+La curva de pedidos en espera dice cuántos pedidos estaban creados y todavía sin entregar ni
+rechazar en cada segundo de la simulación. Se arma un arreglo con un lugar por segundo, donde cada
+pedido creado suma uno y cada pedido cerrado resta uno, y la curva es su suma acumulada. En GPU se
+acumula por secciones de 256 en shared memory, con dos kernels para comparar, Kogge-Stone y
+Brent-Kung, y los totales de las secciones se acumulan en niveles hasta que entran en una sola.
+Al terminar, el programa imprime el pico de pedidos en espera, el minuto en que ocurrió y cuántos
+quedaron al cierre.
 
 ### Configuración de ciudad
 

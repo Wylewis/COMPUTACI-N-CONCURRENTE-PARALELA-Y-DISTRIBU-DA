@@ -30,6 +30,8 @@ public:
 
     Summary summary() const;
     std::vector<int> deliveryTimesMs() const;
+    std::vector<std::int64_t> createdTimesMs() const;
+    std::vector<std::int64_t> closedTimesMs() const;
 
 private:
     void writerLoop();

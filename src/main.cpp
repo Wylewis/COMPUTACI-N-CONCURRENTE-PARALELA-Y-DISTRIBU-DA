@@ -17,6 +17,7 @@
 #include "event_logger.h"
 #include "fleet.h"
 #include "generator_thread.h"
+#include "gpu/backlog_curve.h"
 #include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
 #include "gpu/delivery_kpis.h"
@@ -498,6 +499,20 @@ int main(int argc, char** argv) {
                       << (kpis.sumMs + count / 2) / count << " ms, la mas lenta tardo " << kpis.maxMs << " ms y "
                       << kpis.late << " de " << count << " pasaron de " << kLateDeliveryMs / 60'000 << " minutos ("
                       << 100 * static_cast<long long>(kpis.late) / count << " %)\n";
+        }
+        const std::vector<int> backlogChanges = backlogDeltas(logger.createdTimesMs(), logger.closedTimesMs());
+        if (backlogChanges.empty()) {
+            std::cerr << "delivery_sim: sin pedidos, no hay curva de pedidos en espera\n";
+        } else {
+            const std::vector<int> waiting =
+                opts.gpuBackend ? gpuWorker.submit([&backlogChanges] {
+                                               return backlogCurveGpu(backlogChanges.data(), backlogChanges.size());
+                                           }).get()
+                                : backlogCurveCpu(backlogChanges.data(), backlogChanges.size());
+            const BacklogPeak peak = backlogPeak(waiting);
+            std::cerr << "delivery_sim: pedidos en espera, un tramo por segundo (" << (opts.gpuBackend ? "GPU" : "CPU") << "): "
+                      << waiting.size() << " segundos; pico de " << peak.waiting << " pedidos en el minuto " << peak.slot / 60
+                      << "; al cierre quedan " << waiting.back() << "\n";
         }
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;

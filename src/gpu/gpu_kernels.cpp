@@ -1,6 +1,7 @@
 #include "gpu_kernel_info.h"
 
 #include "argmin_rows.h"
+#include "backlog_curve.h"
 #include "coverage_field.h"
 #include "delivery_histogram.h"
 #include "delivery_kpis.h"
@@ -18,5 +19,6 @@ std::vector<GpuKernelInfo> gpuKernelInfos() {
     for (const GpuKernelInfo& k : demandHeatmapKernelInfos()) all.push_back(k);
     for (const GpuKernelInfo& k : coverageFieldKernelInfos()) all.push_back(k);
     for (const GpuKernelInfo& k : deliveryKpisKernelInfos()) all.push_back(k);
+    for (const GpuKernelInfo& k : backlogCurveKernelInfos()) all.push_back(k);
     return all;
 }

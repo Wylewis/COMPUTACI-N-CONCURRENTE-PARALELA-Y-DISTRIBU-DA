@@ -11,6 +11,7 @@
 #include <thread>
 
 #include "gpu/argmin_rows.h"
+#include "gpu/backlog_curve.h"
 #include "gpu/coverage_field.h"
 #include "gpu/delivery_histogram.h"
 #include "gpu/delivery_kpis.h"
@@ -501,6 +502,52 @@ void benchDeliveryKpis(BenchRunner& runner) {
     }
 }
 
+void benchBacklogCurve(BenchRunner& runner) {
+    for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
+        if (!runner.wants(n)) continue;
+        std::mt19937 rng(static_cast<unsigned>(n) + 9u);
+        std::vector<int> delta(n);
+        int waiting = 0;
+        for (int& d : delta) {
+            const int in = static_cast<int>(rng() % 4u);
+            const int out = waiting + in > 0 ? static_cast<int>(rng() % static_cast<unsigned>(waiting + in + 1)) % 4 : 0;
+            d = in - out;
+            waiting += d;
+        }
+        const std::vector<int> expected = backlogCurveCpu(delta.data(), n);
+        BenchCase c;
+        c.app = "backlog_curve";
+        c.concept = "09_scan";
+        c.size = std::to_string(n);
+        c.items = n;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = backlogCurveCpu(delta.data(), n); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = backlogCurveCpuParallel(delta.data(), n, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = backlogCurveGpu(delta.data(), n, ScanKernel::KoggeStone, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"brentkung", [&] {
+            GpuOutcome r;
+            r.correct = backlogCurveGpu(delta.data(), n, ScanKernel::BrentKung, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 void benchDemandHeatmap(BenchRunner& runner) {
     const std::vector<float> weights = gaussianWeights();
     for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
@@ -615,5 +662,6 @@ std::vector<BenchApp> benchApps() {
         {"demand_heatmap", "05_conv", benchDemandHeatmap},
         {"coverage_field", "06_stencil", benchCoverageField},
         {"delivery_kpis", "08_reduction", benchDeliveryKpis},
+        {"backlog_curve", "09_scan", benchBacklogCurve},
     };
 }

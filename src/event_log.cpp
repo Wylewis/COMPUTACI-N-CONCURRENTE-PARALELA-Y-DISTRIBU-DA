@@ -157,6 +157,7 @@ void EventLog::write(const Event& event) {
     switch (e.type) {
         case EventType::OrderCreated:
             ++summary_.created;
+            createdMs_.push_back(e.t);
             if (e.order) createdAt_[*e.order] = e.t;
             if (e.urgent && *e.urgent) {
                 ++summary_.urgentCreated;
@@ -165,6 +166,7 @@ void EventLog::write(const Event& event) {
             break;
         case EventType::OrderDelivered: {
             ++summary_.delivered;
+            closedMs_.push_back(e.t);
             if (e.courier) ++summary_.deliveredPerCourier[*e.courier];
             std::int64_t elapsed = 0;
             if (e.order) {
@@ -182,6 +184,7 @@ void EventLog::write(const Event& event) {
         }
         case EventType::OrderRejected:
             ++summary_.rejected;
+            closedMs_.push_back(e.t);
             break;
         case EventType::OrderReassigned:
             ++summary_.reassigned;

@@ -66,3 +66,17 @@ std::vector<int> EventLogger::deliveryTimesMs() const {
     }
     return log_.deliveryTimesMs();
 }
+
+std::vector<std::int64_t> EventLogger::createdTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("las horas de creacion solo son definitivas despues de close()");
+    }
+    return log_.createdTimesMs();
+}
+
+std::vector<std::int64_t> EventLogger::closedTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("las horas de cierre solo son definitivas despues de close()");
+    }
+    return log_.closedTimesMs();
+}

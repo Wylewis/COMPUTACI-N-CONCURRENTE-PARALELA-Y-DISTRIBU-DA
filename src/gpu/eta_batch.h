@@ -26,6 +26,8 @@ struct EtaInput {
     std::size_t orders() const { return orderRestaurantNode.size(); }
 };
 
+EtaInput ordersPermuted(const EtaInput& in, const std::vector<int>& order);
+
 struct CourierRecord {
     int node;
     int availableAtMs;

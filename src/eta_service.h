@@ -26,7 +26,8 @@ public:
         int etaMs = kEtaUnavailable;
     };
 
-    EtaService(Fleet& fleet, const Graph& graph, const SimClock& clock, GpuWorker& gpu, EtaBatchGpu& device);
+    EtaService(Fleet& fleet, const Graph& graph, const SimClock& clock, GpuWorker& gpu, EtaBatchGpu& device,
+               bool groupOnDevice = false);
     ~EtaService();
     EtaService(const EtaService&) = delete;
     EtaService& operator=(const EtaService&) = delete;
@@ -54,6 +55,7 @@ private:
     const SimClock& clock_;
     GpuWorker& gpu_;
     EtaBatchGpu& device_;
+    const bool groupOnDevice_;
     std::mutex mutex_;
     std::condition_variable available_;
     std::deque<Pending> pending_;

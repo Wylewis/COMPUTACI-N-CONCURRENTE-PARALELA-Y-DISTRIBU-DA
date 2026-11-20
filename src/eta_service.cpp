@@ -1,12 +1,14 @@
 #include "eta_service.h"
 
 #include "gpu/argmin_rows.h"
+#include "gpu/group_orders.h"
 
 #include <algorithm>
 #include <utility>
 
-EtaService::EtaService(Fleet& fleet, const Graph& graph, const SimClock& clock, GpuWorker& gpu, EtaBatchGpu& device)
-    : fleet_(fleet), graph_(graph), clock_(clock), gpu_(gpu), device_(device) {
+EtaService::EtaService(Fleet& fleet, const Graph& graph, const SimClock& clock, GpuWorker& gpu, EtaBatchGpu& device,
+                       bool groupOnDevice)
+    : fleet_(fleet), graph_(graph), clock_(clock), gpu_(gpu), device_(device), groupOnDevice_(groupOnDevice) {
     thread_ = std::thread([this] { loop(); });
 }
 
@@ -69,12 +71,34 @@ void EtaService::loop() {
         if (couriersCount > 0)
             for (std::size_t i = 0; i < round.size(); ++i) rotation[i] = static_cast<int>((i * 7919) % fleet.size());
 
+        const int nodes = static_cast<int>(graph_.nodeCount());
+        bool groupable = nodes > 0;
+        for (const int node : in.orderRestaurantNode) groupable = groupable && node >= 0 && node < nodes;
+
         std::vector<EtaKey> best;
+        std::vector<std::size_t> row(round.size());
+        for (std::size_t i = 0; i < row.size(); ++i) row[i] = i;
         try {
             EtaBatchGpu* device = &device_;
             const EtaInput* input = &in;
             const std::vector<int>* turns = &rotation;
-            best = gpu_.submit([device, input, turns] { return device->runBest(*input, *turns); }).get();
+            const bool onDevice = groupOnDevice_;
+            std::pair<std::vector<int>, std::vector<EtaKey>> grouped =
+                gpu_.submit([device, input, turns, nodes, groupable, onDevice] {
+                        std::vector<int> order;
+                        if (groupable) {
+                            const int* restaurant = input->orderRestaurantNode.data();
+                            order = onDevice ? groupOrdersGpu(restaurant, input->orders(), nodes).order
+                                             : groupOrdersCpu(restaurant, input->orders(), nodes).order;
+                        }
+                        std::vector<EtaKey> keys = groupable ? device->runBest(ordersPermuted(*input, order), *turns)
+                                                             : device->runBest(*input, *turns);
+                        return std::make_pair(std::move(order), std::move(keys));
+                    })
+                    .get();
+            best = std::move(grouped.second);
+            for (std::size_t k = 0; k < grouped.first.size() && k < row.size(); ++k)
+                row[static_cast<std::size_t>(grouped.first[k])] = k;
         } catch (const std::exception&) {
             best.clear();
         }
@@ -87,13 +111,14 @@ void EtaService::loop() {
         const bool computed = best.size() == round.size() && couriersCount > 0;
         for (std::size_t i = 0; i < round.size(); ++i) {
             Reply reply;
-            if (computed && keyHasCourier(best[i])) {
-                const std::size_t chosen = static_cast<std::size_t>(courierOfKey(best[i], rotation[i], couriersCount));
+            const std::size_t k = row[i];
+            if (computed && keyHasCourier(best[k])) {
+                const std::size_t chosen = static_cast<std::size_t>(courierOfKey(best[k], rotation[k], couriersCount));
                 if (room[chosen] > 0) {
                     --room[chosen];
                     reply.found = true;
                     reply.courierId = fleet[chosen].id;
-                    reply.etaMs = etaOfKey(best[i]);
+                    reply.etaMs = etaOfKey(best[k]);
                 } else {
                     reply.retry = true;
                     conflicts_.fetch_add(1, std::memory_order_acq_rel);

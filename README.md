@@ -371,6 +371,7 @@ las versiones de CPU.
 | Tabla de tiempos de todos contra todos | 03, mosaicos y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
 | Estimación de entrega por lote | 04, accesos agrupados y estructura de arreglos | El despacho, con `--estimator table` (CPU) o `gpu` (por rondas) | `src/gpu/eta_batch.*`, `src/eta_service.*` |
 | Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
+| Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -390,6 +391,16 @@ lleva la hora de entrega en la parte alta y la moto en la baja, así el mínimo 
 mismo en CPU y en GPU. En una ronda el kernel de estimación y el de elección corren seguidos sobre
 la tarjeta y solo baja una clave por pedido, no la matriz. Si dos pedidos de la misma ronda eligen
 el último lugar de la misma moto, el segundo vuelve a pedir estimación en la ronda siguiente.
+
+Agrupar los pedidos por restaurante es un ordenamiento por conteo en tres pasos: contar los
+pedidos de cada restaurante, hacer un scan exclusivo de esos conteos, que da dónde empieza el
+tramo de cada uno, y escribir cada pedido en su tramo. En GPU el scan es jerárquico: cada bloque
+resuelve 256 posiciones en memoria compartida, las sumas de los bloques se vuelven a escanear y
+se suman como desplazamiento. El conteo y la escritura usan atómicos, así que dentro de un tramo
+el orden no está fijado; las versiones de CPU dejan los pedidos en orden de llegada. El
+coordinador agrupa cada ronda antes de estimar, para que las filas vecinas de la matriz lean las
+mismas celdas de la tabla de tiempos, y devuelve cada respuesta a su pedido. Agrupa en CPU, o en
+la tarjeta con `--backend gpu`.
 
 ### Configuración de ciudad
 

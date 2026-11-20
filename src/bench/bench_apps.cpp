@@ -1,6 +1,7 @@
 #include "bench.h"
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include "gpu/argmin_rows.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
+#include "gpu/group_orders.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
 #include "parallel_for.h"
@@ -276,6 +278,143 @@ void benchDispatchRound(BenchRunner& runner) {
     }
 }
 
+void benchGroupOrders(BenchRunner& runner) {
+    const std::vector<std::pair<std::size_t, int>> sizes{{400, 20}, {4'000, 200}, {40'000, 2'000}, {400'000, 20'000},
+                                                         {4'000'000, 200'000}, {16'000'000, 800'000}};
+    for (const auto& size : sizes) {
+        const std::size_t orders = size.first;
+        const int groups = size.second;
+        if (!runner.wants(orders)) continue;
+        std::mt19937 rng(static_cast<unsigned>(orders));
+        std::uniform_int_distribution<int> any(0, groups - 1);
+        std::vector<int> group(orders);
+        for (int& g : group) g = any(rng);
+        const OrderGroups expected = groupOrdersCpu(group.data(), orders, groups);
+        std::vector<int> counts(static_cast<std::size_t>(groups), 0);
+        for (const int g : group) ++counts[static_cast<std::size_t>(g)];
+        BenchCase c;
+        c.app = "group_orders";
+        c.concept = "09_scan";
+        c.size = std::to_string(orders) + "x" + std::to_string(groups);
+        c.items = orders;
+        c.cpu1 = [&] {
+            Timed r;
+            OrderGroups out;
+            r.ms = timeMs([&] { out = groupOrdersCpu(group.data(), orders, groups); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            OrderGroups out;
+            r.ms = timeMs([&] { out = groupOrdersCpuParallel(group.data(), orders, groups, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            OrderGroups out = groupOrdersGpu(group.data(), orders, groups, &r.times);
+            sortWithinGroups(out);
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"scan", [&] {
+            GpuOutcome r;
+            r.correct = exclusiveScanGpu(counts, &r.times) == expected.start;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
+EtaInput restaurantEtaInput(int nodes, std::size_t orders, std::size_t couriers, std::size_t restaurants, unsigned seed) {
+    EtaInput in = randomEtaInput(nodes, orders, couriers, seed);
+    std::mt19937 rng(seed ^ 0x9e3779b9u);
+    std::uniform_int_distribution<int> node(0, nodes - 1);
+    std::vector<int> kitchens(restaurants);
+    for (int& k : kitchens) k = node(rng);
+    std::uniform_int_distribution<std::size_t> pick(0, restaurants - 1);
+    for (int& r : in.orderRestaurantNode) r = kitchens[pick(rng)];
+    return in;
+}
+
+void benchRoundByRestaurant(BenchRunner& runner, bool grouped) {
+    const CsrGraph city = csrFromGraph(runner.graph(), runner.config().fleet.speedKmh);
+    ThreadPool builders(std::max(1u, std::thread::hardware_concurrency()));
+    const TravelTable table(city.n, travelTableCpuParallel(city, builders));
+    std::shared_ptr<EtaBatchGpu> device;
+    const std::size_t couriers = 3000, restaurants = 200;
+    for (const std::size_t orders : {50u, 150u, 500u, 1000u, 2000u, 4000u}) {
+        const std::size_t items = orders * couriers;
+        if (!runner.wants(items)) continue;
+        const EtaInput in = restaurantEtaInput(city.n, orders, couriers, restaurants, static_cast<unsigned>(items));
+        std::vector<int> matrix(items);
+        etaBatchCpu(table, in, matrix.data());
+        const std::vector<EtaKey> expected = argminRowsCpu(matrix.data(), orders, couriers);
+        const auto round = [&](const std::function<OrderGroups()>& group,
+                               const std::function<std::vector<EtaKey>(const EtaInput&)>& best) {
+            if (!grouped) return best(in);
+            const OrderGroups groups = group();
+            const std::vector<EtaKey> arranged = best(ordersPermuted(in, groups.order));
+            std::vector<EtaKey> out(orders);
+            for (std::size_t k = 0; k < orders; ++k) out[static_cast<std::size_t>(groups.order[k])] = arranged[k];
+            return out;
+        };
+        const auto groupOnCpu = [&] { return groupOrdersCpu(in.orderRestaurantNode.data(), orders, city.n); };
+        BenchCase c;
+        c.app = grouped ? "round_grouped" : "round_arrival";
+        c.concept = "09_scan";
+        c.size = std::to_string(orders) + "x" + std::to_string(couriers);
+        c.items = items;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] {
+                out = round(groupOnCpu, [&](const EtaInput& arranged) {
+                    etaBatchCpu(table, arranged, matrix.data());
+                    return argminRowsCpu(matrix.data(), orders, couriers);
+                });
+            });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<EtaKey> out;
+            r.ms = timeMs([&] {
+                out = round([&] { return groupOrdersCpuParallel(in.orderRestaurantNode.data(), orders, city.n, pool); },
+                            [&](const EtaInput& arranged) {
+                                etaBatchCpuParallel(table, arranged, matrix.data(), pool);
+                                return argminRowsCpuParallel(matrix.data(), orders, couriers, pool);
+                            });
+            });
+            r.correct = out == expected;
+            return r;
+        };
+        const auto onDevice = [&](const std::function<OrderGroups()>& group) {
+            if (!device) device = std::make_shared<EtaBatchGpu>(table);
+            GpuOutcome r;
+            GpuTimes times;
+            std::vector<EtaKey> out;
+            r.times.totalMs = timeMs([&] {
+                out = round(group, [&](const EtaInput& arranged) { return device->runBest(arranged, {}, &times); });
+            });
+            r.times.kernelMs = times.kernelMs;
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] { return onDevice(groupOnCpu); };
+        if (grouped)
+            c.gpuVariants.push_back({"devicegroup", [&] {
+                return onDevice([&] { return groupOrdersGpu(in.orderRestaurantNode.data(), orders, city.n); });
+            }});
+        runner.run(c);
+    }
+}
+
+void benchRoundArrival(BenchRunner& runner) { benchRoundByRestaurant(runner, false); }
+void benchRoundGrouped(BenchRunner& runner) { benchRoundByRestaurant(runner, true); }
+
 }
 
 std::vector<BenchApp> benchApps() {
@@ -285,5 +424,8 @@ std::vector<BenchApp> benchApps() {
         {"eta_batch", "04_performance", benchEtaBatch},
         {"dispatch_argmin", "08_reduction", benchDispatchArgmin},
         {"dispatch_round", "08_reduction", benchDispatchRound},
+        {"group_orders", "09_scan", benchGroupOrders},
+        {"round_arrival", "09_scan", benchRoundArrival},
+        {"round_grouped", "09_scan", benchRoundGrouped},
     };
 }

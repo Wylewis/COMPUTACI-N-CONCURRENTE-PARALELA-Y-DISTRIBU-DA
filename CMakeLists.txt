@@ -79,6 +79,7 @@ set(GPU_SOURCES
   src/gpu/travel_table.cu
   src/gpu/eta_batch.cu
   src/gpu/argmin_rows.cu
+  src/gpu/group_orders.cu
 )
 if(USE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
@@ -99,6 +100,7 @@ add_library(delivery_gpu STATIC ${GPU_SOURCES}
   src/gpu/travel_table_cpu.cpp
   src/gpu/eta_batch_cpu.cpp
   src/gpu/argmin_rows_cpu.cpp
+  src/gpu/group_orders_cpu.cpp
   src/thread_pool.cpp
 )
 target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
@@ -163,6 +165,7 @@ add_gpu_test(travel_table_test)
 add_gpu_test(gpu_occupancy_test)
 add_gpu_test(eta_batch_test)
 add_gpu_test(argmin_rows_test)
+add_gpu_test(group_orders_test)
 add_gpu_test(eta_service_test
   src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp
   src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp

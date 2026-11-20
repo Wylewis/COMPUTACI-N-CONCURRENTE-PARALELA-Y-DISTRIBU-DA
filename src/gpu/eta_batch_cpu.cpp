@@ -39,3 +39,14 @@ void etaBatchCpuParallel(const TravelTable& table, const EtaInput& in, int* eta,
         etaRows(table, in, eta, begin, end);
     });
 }
+
+EtaInput ordersPermuted(const EtaInput& in, const std::vector<int>& order) {
+    EtaInput out = in;
+    for (std::size_t k = 0; k < order.size() && k < in.orders(); ++k) {
+        const std::size_t from = static_cast<std::size_t>(order[k]);
+        out.orderRestaurantNode[k] = in.orderRestaurantNode[from];
+        out.orderDeliveryNode[k] = in.orderDeliveryNode[from];
+        out.orderReadyMs[k] = in.orderReadyMs[from];
+    }
+    return out;
+}

@@ -248,7 +248,10 @@ int main(int argc, char** argv) {
         fleet.enableBreakdowns(config.incidents, config.orders.seed, [&book](Order o) { book.putBack(std::move(o)); });
         book.onSubmitted([&fleet] { fleet.notifyChange(); });
         std::unique_ptr<EtaService> etaService;
-        if (etaDevice) etaService = std::make_unique<EtaService>(fleet, graph, clock, gpuWorker, *etaDevice);
+        if (etaDevice) {
+            etaService = std::make_unique<EtaService>(fleet, graph, clock, gpuWorker, *etaDevice, opts.gpuBackend);
+            std::cerr << "delivery_sim: cada ronda se agrupa por restaurante en " << (opts.gpuBackend ? "la GPU" : "la CPU") << "\n";
+        }
         std::vector<std::unique_ptr<DispatcherThread>> dispatchers;
         for (const RestaurantConfig& r : config.restaurants) {
             dispatchers.push_back(std::make_unique<DispatcherThread>(r, book, fleet, graph, config.fleet.speedKmh,

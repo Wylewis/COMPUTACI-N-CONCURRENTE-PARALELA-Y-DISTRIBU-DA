@@ -46,13 +46,13 @@ struct Rig {
     std::unique_ptr<EtaBatchGpu> device;
     std::unique_ptr<EtaService> service;
 
-    Rig(const std::string& path, int couriers, int bag)
+    Rig(const std::string& path, int couriers, int bag, bool groupOnDevice = false)
         : cfg(lineCity(couriers, bag)), graph(cfg), logger(path, Fleet::courierIds(couriers)),
           restaurants(cfg.restaurants), fleet(cfg.fleet, graph, restaurants, logger, clock, stop) {
         const CsrGraph csr = csrFromGraph(graph, cfg.fleet.speedKmh);
         table = TravelTable(csr.n, travelTableCpu(csr));
         device = gpu.submit([this] { return std::make_unique<EtaBatchGpu>(table); }).get();
-        service = std::make_unique<EtaService>(fleet, graph, clock, gpu, *device);
+        service = std::make_unique<EtaService>(fleet, graph, clock, gpu, *device, groupOnDevice);
         clock.start();
     }
     ~Rig() {
@@ -121,6 +121,38 @@ int main() {
               "los 19 pedidos que llegan mientras la GPU esta ocupada salen juntos en una sola ronda");
         check(found == 12 && perCourier.size() == 6 && withinBag && retried == 7 && r.service->conflicts() == 7,
               "dentro de la ronda se prometen 12 lugares, 2 por moto, y los 7 que chocan vuelven a pedir");
+    }
+    for (const bool groupOnDevice : {false, true}) {
+        Rig r(path, 6, 2, groupOnDevice);
+        const int b = static_cast<int>(r.graph.nodeIndex("B"));
+        const int c = static_cast<int>(r.graph.nodeIndex("C"));
+        std::promise<void> gate, started;
+        std::shared_future<void> open = gate.get_future().share();
+        auto busy = r.gpu.submit([open, &started] {
+            started.set_value();
+            open.wait();
+        });
+        started.get_future().wait();
+        std::future<EtaService::Reply> first = r.service->request(b, c, 0);
+        while (r.gpu.pending() != 1) std::this_thread::sleep_for(1ms);
+        std::vector<std::future<EtaService::Reply>> far, near;
+        for (int i = 0; i < 4; ++i) {
+            far.push_back(r.service->request(c, b, 0));
+            near.push_back(r.service->request(b, c, 0));
+        }
+        gate.set_value();
+        busy.get();
+        bool matched = first.get().found;
+        int nearEta = -1;
+        for (int i = 0; i < 4; ++i) {
+            const EtaService::Reply fromC = far[static_cast<std::size_t>(i)].get();
+            const EtaService::Reply fromB = near[static_cast<std::size_t>(i)].get();
+            if (nearEta < 0) nearEta = fromB.etaMs;
+            matched = matched && fromC.found && fromB.found && fromB.etaMs == nearEta && fromC.etaMs == nearEta + 50'000;
+        }
+        check(matched && r.service->largestRound() == 8,
+              std::string("una ronda con dos restaurantes intercalados, agrupada en ") + (groupOnDevice ? "la tarjeta" : "la CPU") +
+                  ": cada pedido recibe la hora de entrega de su propio restaurante");
     }
     {
         Rig r(path, 2, 1);

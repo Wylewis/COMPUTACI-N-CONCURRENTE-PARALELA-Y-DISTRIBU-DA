@@ -73,11 +73,11 @@ __global__ void countChangedKernel(const int* a, const int* b, unsigned cells, u
 
 std::vector<int> coverageGpu(const CoverageMap& map, const int* seed, CoverKernel kernel, GpuTimes* times, int* sweeps) {
     const std::size_t cells = static_cast<std::size_t>(map.grid > 0 ? map.grid : 0) * static_cast<std::size_t>(map.grid > 0 ? map.grid : 0);
+    Timer total;
     std::vector<int> out(cells, kCoverFar);
     if (sweeps) *sweeps = 0;
     if (cells == 0) return out;
 
-    Timer total;
     int *current = nullptr, *next = nullptr;
     unsigned char* open = nullptr;
     unsigned* changed = nullptr;

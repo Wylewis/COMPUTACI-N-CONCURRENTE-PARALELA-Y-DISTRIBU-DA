@@ -46,6 +46,7 @@ GpuKernelInfo travelTableKernelInfo() {
 
 std::vector<int> travelTableGpu(const CsrGraph& g, GpuTimes* times, int* squarings) {
     const std::size_t n = static_cast<std::size_t>(g.n);
+    Timer total;
     std::vector<int> table(n * n, kUnreachableMs);
     if (squarings) *squarings = 0;
     if (n == 0) return table;
@@ -57,7 +58,6 @@ std::vector<int> travelTableGpu(const CsrGraph& g, GpuTimes* times, int* squarin
         }
     }
 
-    Timer total;
     const std::size_t bytes = n * n * sizeof(int);
     int *current = nullptr, *next = nullptr, *changed = nullptr;
     CHECK(cudaMalloc(&current, bytes));

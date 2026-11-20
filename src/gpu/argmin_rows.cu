@@ -40,9 +40,9 @@ void argminRowsOnDevice(const int* etaDevice, int orders, int couriers, const in
 
 std::vector<EtaKey> argminRowsGpu(const int* eta, std::size_t orders, std::size_t couriers, const int* rotation,
                                   GpuTimes* times) {
+    Timer total;
     std::vector<EtaKey> best(orders, etaKeyOf(kEtaUnavailable, 0, 0, 0));
     if (orders == 0 || couriers == 0) return best;
-    Timer total;
     const size_t cells = orders * couriers;
     int *etaDevice = nullptr, *rotationDevice = nullptr;
     EtaKey* bestDevice = nullptr;

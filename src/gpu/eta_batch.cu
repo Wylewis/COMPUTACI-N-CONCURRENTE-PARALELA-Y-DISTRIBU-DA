@@ -83,10 +83,10 @@ EtaBatchGpu::~EtaBatchGpu() {
 std::vector<int> EtaBatchGpu::run(const EtaInput& in, EtaLayout layout, GpuTimes* times) {
     const size_t couriersCount = in.couriers();
     const size_t ordersCount = in.orders();
+    Timer total;
     std::vector<int> eta(couriersCount * ordersCount, kEtaUnavailable);
     if (eta.empty() || !table_) return eta;
 
-    Timer total;
     int* etaDevice = nullptr;
     CHECK(cudaMalloc(&etaDevice, eta.size() * sizeof(int)));
     OrderArrays orders{toDevice(in.orderRestaurantNode.data(), ordersCount), toDevice(in.orderDeliveryNode.data(), ordersCount),
@@ -136,10 +136,10 @@ std::vector<int> EtaBatchGpu::run(const EtaInput& in, EtaLayout layout, GpuTimes
 std::vector<unsigned long long> EtaBatchGpu::runBest(const EtaInput& in, const std::vector<int>& rotation, GpuTimes* times) {
     const size_t couriersCount = in.couriers();
     const size_t ordersCount = in.orders();
+    Timer total;
     std::vector<unsigned long long> best(ordersCount, etaKeyOf(kEtaUnavailable, 0, 0, 0));
     if (couriersCount == 0 || ordersCount == 0 || !table_) return best;
 
-    Timer total;
     const size_t cells = couriersCount * ordersCount;
     if (cells > matrixCells_) {
         if (matrix_) CHECK(cudaFree(matrix_));

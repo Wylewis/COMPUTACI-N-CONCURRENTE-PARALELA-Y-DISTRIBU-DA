@@ -44,10 +44,10 @@ __global__ void smoothGlobalKernel(const float* counts, float* out, int grid, co
 
 std::vector<float> smoothGpu(const float* counts, int grid, const float* weights, HeatWeights where, GpuTimes* times) {
     const std::size_t cells = static_cast<std::size_t>(grid > 0 ? grid : 0) * static_cast<std::size_t>(grid > 0 ? grid : 0);
+    Timer total;
     std::vector<float> out(cells, 0.0f);
     if (cells == 0) return out;
 
-    Timer total;
     const std::size_t weightBytes = static_cast<std::size_t>(kHeatDim * kHeatDim) * sizeof(float);
     float *in = nullptr, *smoothed = nullptr, *weightsDevice = nullptr;
     CHECK(cudaMalloc(&in, cells * sizeof(float)));

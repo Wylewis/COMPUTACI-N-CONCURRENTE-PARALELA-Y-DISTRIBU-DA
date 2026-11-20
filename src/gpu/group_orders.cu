@@ -65,10 +65,10 @@ void exclusiveScanOnDevice(const int* in, int n, int* out) {
 }
 
 std::vector<int> exclusiveScanGpu(const std::vector<int>& values, GpuTimes* times) {
+    Timer total;
     std::vector<int> padded(values);
     padded.push_back(0);
     std::vector<int> out(padded.size(), 0);
-    Timer total;
     const int n = static_cast<int>(padded.size());
     int *in = nullptr, *scanned = nullptr;
     CHECK(cudaMalloc(&in, padded.size() * sizeof(int)));
@@ -91,13 +91,13 @@ std::vector<int> exclusiveScanGpu(const std::vector<int>& values, GpuTimes* time
 }
 
 OrderGroups groupOrdersGpu(const int* group, std::size_t orders, int groups, GpuTimes* times) {
+    Timer total;
     OrderGroups out;
     const std::size_t bins = static_cast<std::size_t>(groups > 0 ? groups : 0) + 1;
     out.start.assign(bins, 0);
     out.order.assign(orders, 0);
     if (orders == 0 || groups <= 0) return out;
 
-    Timer total;
     int *groupDevice = nullptr, *counts = nullptr, *start = nullptr, *cursor = nullptr, *grouped = nullptr;
     CHECK(cudaMalloc(&groupDevice, orders * sizeof(int)));
     CHECK(cudaMalloc(&counts, bins * sizeof(int)));

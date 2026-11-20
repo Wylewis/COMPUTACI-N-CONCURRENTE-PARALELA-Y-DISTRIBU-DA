@@ -41,10 +41,10 @@ __global__ void histogramPrivatizedKernel(const int* ms, unsigned n, int binMs, 
 std::vector<unsigned> deliveryHistogramGpu(const int* ms, std::size_t n, int bins, HistogramMode mode, GpuTimes* times,
                                            int binMs) {
     const int width = histogramBins(bins);
+    Timer total;
     std::vector<unsigned> counts(static_cast<std::size_t>(width), 0);
     if (n == 0) return counts;
 
-    Timer total;
     int* device = nullptr;
     unsigned* countsDevice = nullptr;
     CHECK(cudaMalloc(&device, n * sizeof(int)));

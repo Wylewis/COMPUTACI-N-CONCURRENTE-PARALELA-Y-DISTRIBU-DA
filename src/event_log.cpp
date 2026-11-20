@@ -1,6 +1,8 @@
 #include "event_log.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include "nlohmann/json.hpp"
@@ -170,6 +172,7 @@ void EventLog::write(const Event& event) {
                 if (it != createdAt_.end()) elapsed = e.t - it->second;
             }
             deliveredTotalMs_ += elapsed;
+            deliveryMs_.push_back(static_cast<int>(std::min<std::int64_t>(elapsed, std::numeric_limits<int>::max())));
             if (elapsed > summary_.maxDeliveryMs) summary_.maxDeliveryMs = elapsed;
             if (e.order && urgent_.count(*e.order)) {
                 ++summary_.urgentDelivered;

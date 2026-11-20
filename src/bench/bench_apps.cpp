@@ -10,6 +10,7 @@
 #include <thread>
 
 #include "gpu/argmin_rows.h"
+#include "gpu/delivery_histogram.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
@@ -415,6 +416,47 @@ void benchRoundByRestaurant(BenchRunner& runner, bool grouped) {
 void benchRoundArrival(BenchRunner& runner) { benchRoundByRestaurant(runner, false); }
 void benchRoundGrouped(BenchRunner& runner) { benchRoundByRestaurant(runner, true); }
 
+void benchDeliveryHistogram(BenchRunner& runner) {
+    const int bins = 120;
+    for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
+        if (!runner.wants(n)) continue;
+        std::mt19937 rng(static_cast<unsigned>(n));
+        std::vector<int> ms(n);
+        for (int& v : ms) v = 600'000 + static_cast<int>(rng() % 600'000u + rng() % 600'000u + rng() % 600'000u);
+        const std::vector<unsigned> expected = deliveryHistogramCpu(ms.data(), n, bins);
+        BenchCase c;
+        c.app = "delivery_histogram";
+        c.concept = "07_histogram";
+        c.size = std::to_string(n);
+        c.items = n;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = deliveryHistogramCpu(ms.data(), n, bins); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<unsigned> out;
+            r.ms = timeMs([&] { out = deliveryHistogramCpuParallel(ms.data(), n, bins, pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = deliveryHistogramGpu(ms.data(), n, bins, HistogramMode::Privatized, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"atomic", [&] {
+            GpuOutcome r;
+            r.correct = deliveryHistogramGpu(ms.data(), n, bins, HistogramMode::Atomic, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 }
 
 std::vector<BenchApp> benchApps() {
@@ -427,5 +469,6 @@ std::vector<BenchApp> benchApps() {
         {"group_orders", "09_scan", benchGroupOrders},
         {"round_arrival", "09_scan", benchRoundArrival},
         {"round_grouped", "09_scan", benchRoundGrouped},
+        {"delivery_histogram", "07_histogram", benchDeliveryHistogram},
     };
 }

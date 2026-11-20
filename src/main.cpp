@@ -12,6 +12,7 @@
 #include "event_logger.h"
 #include "fleet.h"
 #include "generator_thread.h"
+#include "gpu/delivery_histogram.h"
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
@@ -325,6 +326,25 @@ int main(int argc, char** argv) {
                   << rejectedNoCourier << " sin repartidor, " << fleet.delivered() << " entregados, "
                   << fleet.breakdowns() << " averias, " << fleet.rescues() << " rescates, " << unfinished.size()
                   << " en el libro y " << inBags << " en mochilas\n";
+        const std::vector<int> deliveryMs = logger.deliveryTimesMs();
+        if (deliveryMs.empty()) {
+            std::cerr << "delivery_sim: sin entregas, no hay histograma de tiempos\n";
+        } else {
+            const int bins = 180;
+            const std::vector<unsigned> perMinute =
+                opts.gpuBackend ? gpuWorker.submit([&deliveryMs] {
+                                               return deliveryHistogramGpu(deliveryMs.data(), deliveryMs.size(), bins);
+                                           }).get()
+                                : deliveryHistogramCpuParallel(deliveryMs.data(), deliveryMs.size(), bins, estimators);
+            std::size_t busiest = 0;
+            for (std::size_t b = 1; b < perMinute.size(); ++b)
+                if (perMinute[b] > perMinute[busiest]) busiest = b;
+            std::cerr << "delivery_sim: tiempos de entrega, un tramo por minuto (" << (opts.gpuBackend ? "GPU" : "CPU") << "): "
+                      << deliveryMs.size() << " entregas; mediana en el minuto " << histogramPercentileBin(perMinute, 0.5)
+                      << ", p90 en el " << histogramPercentileBin(perMinute, 0.9) << ", p99 en el "
+                      << histogramPercentileBin(perMinute, 0.99) << "; minuto mas cargado: " << busiest << " con "
+                      << perMinute[busiest] << " entregas\n";
+        }
         std::cout << logger.summary().toJsonLine() << std::endl;
         return 0;
     } catch (const std::exception& e) {

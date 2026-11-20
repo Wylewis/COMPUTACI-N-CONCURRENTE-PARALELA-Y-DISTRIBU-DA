@@ -372,6 +372,7 @@ las versiones de CPU.
 | Estimación de entrega por lote | 04, accesos agrupados y estructura de arreglos | El despacho, con `--estimator table` (CPU) o `gpu` (por rondas) | `src/gpu/eta_batch.*`, `src/eta_service.*` |
 | Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
 | Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
+| Histograma de tiempos de entrega | 07, histograma | El resumen final de la simulación | `src/gpu/delivery_histogram.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -401,6 +402,11 @@ el orden no está fijado; las versiones de CPU dejan los pedidos en orden de lle
 coordinador agrupa cada ronda antes de estimar, para que las filas vecinas de la matriz lean las
 mismas celdas de la tabla de tiempos, y devuelve cada respuesta a su pedido. Agrupa en CPU, o en
 la tarjeta con `--backend gpu`.
+
+El histograma cuenta cuántas entregas tardaron cada cantidad de minutos, un tramo por minuto. En
+GPU hay dos kernels: uno suma con atómicos directamente en los contadores globales, y otro le da
+a cada bloque un histograma propio en shared memory que se vuelca al final. Al terminar la
+simulación el programa imprime la mediana, el p90, el p99 y el minuto más cargado.
 
 ### Configuración de ciudad
 

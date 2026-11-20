@@ -59,3 +59,10 @@ Summary EventLogger::summary() const {
     }
     return log_.summary();
 }
+
+std::vector<int> EventLogger::deliveryTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los tiempos de entrega solo son definitivos despues de close()");
+    }
+    return log_.deliveryTimesMs();
+}

@@ -29,6 +29,7 @@ public:
     std::int64_t written() const { return written_.load(std::memory_order_acquire); }
 
     Summary summary() const;
+    std::vector<int> deliveryTimesMs() const;
 
 private:
     void writerLoop();

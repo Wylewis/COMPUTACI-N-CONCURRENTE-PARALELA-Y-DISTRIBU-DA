@@ -36,4 +36,6 @@ std::vector<int> coverageGpu(const CoverageMap& map, const int* seed, CoverKerne
 
 CoverageWorst worstCovered(const CoverageMap& map, const std::vector<int>& field);
 
+unsigned coverageChangedBlocks(const int* aDevice, const int* bDevice, std::size_t cells, unsigned* changedDevice);
+
 std::vector<GpuKernelInfo> coverageFieldKernelInfos();

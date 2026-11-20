@@ -380,6 +380,7 @@ las versiones de CPU.
 | Curva de pedidos en espera | 09, scan | El resumen final de la simulación | `src/gpu/backlog_curve.*` |
 | Pedidos por restaurante y franja horaria | 07, histograma | El resumen final de la simulación | `src/gpu/restaurant_slots.*` |
 | Tendencia de la demanda | 05, convolución | El resumen final de la simulación | `src/gpu/demand_trend.*` |
+| Campo de respuesta con motos ocupadas | 06, stencil | El resumen final de la simulación | `src/gpu/response_field.*` |
 
 La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
 intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
@@ -460,6 +461,14 @@ dimensión con 15 pesos gaussianos en memoria constante. En GPU hay dos kernels:
 vecinos de memoria global y otro carga antes un tile de 256 valores con su borde en shared memory.
 Al terminar, el programa imprime el pico sostenido de la demanda y, para comparar, el minuto
 suelto más cargado.
+
+El campo de respuesta es como el de cobertura, pero cuenta también las motos ocupadas: una moto
+libre vale cero y una ocupada arranca con el tiempo que le falta para terminar su viaje, en el
+lugar donde va a quedar. Dice cuánto tardaría en llegar a cada zona la primera moto disponible.
+En GPU hay un kernel que hace 8 pasadas por lanzamiento: cada bloque carga en shared memory su
+tile de 16 por 16 con un borde de 8 celdas, hace las 8 pasadas ahí y escribe solo las celdas de
+adentro. Se compara con el kernel de una pasada por lanzamiento. Al terminar, el programa informa
+la zona peor atendida.
 
 ### Configuración de ciudad
 

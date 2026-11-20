@@ -27,6 +27,7 @@
 #include "gpu/gpu_backend.h"
 #include "gpu/gpu_kernel_info.h"
 #include "gpu/gpu_worker.h"
+#include "gpu/response_field.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -355,6 +356,36 @@ int main(int argc, char** argv) {
             }
             return spots;
         };
+        struct FleetSpots {
+            std::vector<float> x, y;
+            std::vector<int> waitMs;
+            std::size_t idle = 0, busy = 0;
+        };
+        const auto fleetSpots = [&] {
+            FleetSpots spots;
+            const std::int64_t now = clock.nowMs();
+            for (const CourierView& v : fleet.views()) {
+                const bool idle = v.state == CourierState::Idle;
+                if (v.state == CourierState::BrokenDown || (!idle && !v.trip)) continue;
+                GeoPoint at;
+                std::int64_t wait = 0;
+                if (!idle) {
+                    at = v.trip->positionAt(v.trip->arrivalMs());
+                    wait = std::max<std::int64_t>(0, v.trip->arrivalMs() - now);
+                } else if (v.trip) {
+                    at = v.trip->positionAt(now);
+                } else {
+                    const Graph::Node& node = graph.nodeAt(graph.nodeIndex(v.node));
+                    at = {node.lat, node.lon};
+                }
+                const auto spot = mapSpot(config.map.bounds, at.lat, at.lon);
+                spots.x.push_back(spot.first);
+                spots.y.push_back(spot.second);
+                spots.waitMs.push_back(static_cast<int>(std::min<std::int64_t>(wait, kCoverFar)));
+                ++(idle ? spots.idle : spots.busy);
+            }
+            return spots;
+        };
         const auto coverageFrom = [&](const std::vector<float>& spots, int* sweeps) {
             std::vector<float> xs, ys;
             for (std::size_t i = 0; i + 1 < spots.size(); i += 2) xs.push_back(spots[i]), ys.push_back(spots[i + 1]);
@@ -420,6 +451,7 @@ int main(int argc, char** argv) {
         }
         const bool bySignal = watcher.signalsReceived() > 0;
         const std::vector<float> idleAtClose = idleSpots();
+        const FleetSpots fleetAtClose = fleetSpots();
         stop.request();
 
         generatorThread.join();
@@ -472,6 +504,27 @@ int main(int argc, char** argv) {
                       << sweeps << " pasadas; zona peor cubierta en la fila " << worst.cell / static_cast<std::size_t>(heatGrid)
                       << ", columna " << worst.cell % static_cast<std::size_t>(heatGrid) << ", a " << worst.ms / 1000
                       << " s de la moto libre mas cercana; " << worst.reached << " celdas con calle cubiertas y "
+                      << worst.unreached << " sin alcanzar\n";
+        }
+        if (fleetAtClose.x.empty()) {
+            std::cerr << "delivery_sim: sin motos en servicio al cierre, no hay campo de respuesta\n";
+        } else {
+            const std::vector<int> seed = responseSeed(streetMap, fleetAtClose.x.data(), fleetAtClose.y.data(),
+                                                       fleetAtClose.waitMs.data(), fleetAtClose.x.size());
+            int sweeps = 0;
+            const std::vector<int> response =
+                opts.gpuBackend ? gpuWorker.submit([&streetMap, &seed, &sweeps] {
+                                               return responseFieldGpu(streetMap, seed.data(), ResponseKernel::ManySweeps, nullptr,
+                                                                       &sweeps);
+                                           }).get()
+                                : coverageCpu(streetMap, seed.data(), &sweeps);
+            const CoverageWorst worst = worstCovered(streetMap, response);
+            std::cerr << "delivery_sim: campo de respuesta, cuadricula de " << heatGrid << " x " << heatGrid << " ("
+                      << (opts.gpuBackend ? "GPU" : "CPU") << "): " << fleetAtClose.idle << " motos libres y "
+                      << fleetAtClose.busy << " ocupadas al cierre, " << sweeps << " pasadas; zona peor atendida en la fila "
+                      << worst.cell / static_cast<std::size_t>(heatGrid) << ", columna "
+                      << worst.cell % static_cast<std::size_t>(heatGrid) << ", a " << worst.ms / 1000
+                      << " s de la primera moto disponible; " << worst.reached << " celdas con calle cubiertas y "
                       << worst.unreached << " sin alcanzar\n";
         }
         const std::vector<int> deliveryMs = logger.deliveryTimesMs();

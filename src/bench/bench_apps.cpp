@@ -20,6 +20,7 @@
 #include "gpu/eta_batch.h"
 #include "gpu/gpu_backend.h"
 #include "gpu/group_orders.h"
+#include "gpu/response_field.h"
 #include "gpu/restaurant_slots.h"
 #include "gpu/travel_table.h"
 #include "gpu/travel_table_graph.h"
@@ -464,6 +465,56 @@ void benchDeliveryHistogram(BenchRunner& runner) {
     }
 }
 
+void benchResponseField(BenchRunner& runner) {
+    for (const int grid : {64, 128, 256, 512, 1024, 2048, 4096}) {
+        const std::size_t cells = static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
+        if (!runner.wants(cells)) continue;
+        std::mt19937 rng(static_cast<unsigned>(grid) + 6u);
+        CoverageMap map;
+        map.grid = grid;
+        map.stepXMs = 7;
+        map.stepYMs = 9;
+        map.open.resize(cells);
+        for (unsigned char& o : map.open) o = rng() % 7u != 0 ? 1 : 0;
+        std::vector<int> seed(cells, kCoverFar);
+        for (std::size_t k = 0; k < std::max<std::size_t>(4, cells / 1024); ++k)
+            seed[rng() % cells] = k % 2 == 0 ? 0 : static_cast<int>(rng() % 400u);
+        int sweeps = 0;
+        const std::vector<int> expected = coverageCpu(map, seed.data(), &sweeps);
+        std::cerr << "bench: response_field " << grid << "x" << grid << ": " << sweeps << " pasadas hasta converger\n";
+        BenchCase c;
+        c.app = "response_field";
+        c.concept = "06_stencil";
+        c.size = std::to_string(grid) + "x" + std::to_string(grid);
+        c.items = cells;
+        c.cpu1 = [&] {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = coverageCpu(map, seed.data()); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.cpuN = [&](ThreadPool& pool) {
+            Timed r;
+            std::vector<int> out;
+            r.ms = timeMs([&] { out = coverageCpuParallel(map, seed.data(), pool); });
+            r.correct = out == expected;
+            return r;
+        };
+        c.gpu = [&] {
+            GpuOutcome r;
+            r.correct = responseFieldGpu(map, seed.data(), ResponseKernel::ManySweeps, &r.times) == expected;
+            return r;
+        };
+        c.gpuVariants.push_back({"onesweep", [&] {
+            GpuOutcome r;
+            r.correct = responseFieldGpu(map, seed.data(), ResponseKernel::OneSweep, &r.times) == expected;
+            return r;
+        }});
+        runner.run(c);
+    }
+}
+
 void benchDeliveryKpis(BenchRunner& runner) {
     for (const std::size_t n : {1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u, 40'000'000u}) {
         if (!runner.wants(n)) continue;
@@ -762,5 +813,6 @@ std::vector<BenchApp> benchApps() {
         {"backlog_curve", "09_scan", benchBacklogCurve},
         {"restaurant_slots", "07_histogram", benchRestaurantSlots},
         {"demand_trend", "05_conv", benchDemandTrend},
+        {"response_field", "06_stencil", benchResponseField},
     };
 }

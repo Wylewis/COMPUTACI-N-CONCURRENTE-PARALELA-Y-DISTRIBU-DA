@@ -71,6 +71,16 @@ __global__ void countChangedKernel(const int* a, const int* b, unsigned cells, u
     if (t == 0 && differs[0] != 0) atomicAdd(changedBlocks, 1u);
 }
 
+unsigned coverageChangedBlocks(const int* aDevice, const int* bDevice, std::size_t cells, unsigned* changedDevice) {
+    unsigned changedBlocks = 0;
+    CHECK(cudaMemset(changedDevice, 0, sizeof(unsigned)));
+    launch(countChangedKernel, dim3(cdiv(static_cast<unsigned>(cells), CHECK_BLOCK * CHECK_PER_THREAD)), dim3(CHECK_BLOCK), aDevice,
+           bDevice, static_cast<unsigned>(cells), changedDevice);
+    CHECK(cudaGetLastError());
+    CHECK(cudaMemcpy(&changedBlocks, changedDevice, sizeof(unsigned), cudaMemcpyDeviceToHost));
+    return changedBlocks;
+}
+
 std::vector<int> coverageGpu(const CoverageMap& map, const int* seed, CoverKernel kernel, GpuTimes* times, int* sweeps) {
     const std::size_t cells = static_cast<std::size_t>(map.grid > 0 ? map.grid : 0) * static_cast<std::size_t>(map.grid > 0 ? map.grid : 0);
     Timer total;
@@ -92,7 +102,6 @@ std::vector<int> coverageGpu(const CoverageMap& map, const int* seed, CoverKerne
     const dim3 block(COVER_BLOCK, COVER_BLOCK);
     const dim3 basicBlocks(cdiv(side, COVER_BLOCK), cdiv(side, COVER_BLOCK));
     const dim3 tiledBlocks(cdiv(side, static_cast<unsigned>(COVER_OUT)), cdiv(side, static_cast<unsigned>(COVER_OUT)));
-    const dim3 checkBlocks(cdiv(static_cast<unsigned>(cells), CHECK_BLOCK * CHECK_PER_THREAD));
     int done = 0;
     double kernelMs = 0.0;
     {
@@ -110,11 +119,7 @@ std::vector<int> coverageGpu(const CoverageMap& map, const int* seed, CoverKerne
                 std::swap(current, next);
                 ++done;
             }
-            CHECK(cudaMemset(changed, 0, sizeof(unsigned)));
-            launch(countChangedKernel, checkBlocks, dim3(CHECK_BLOCK), static_cast<const int*>(current),
-                   static_cast<const int*>(next), static_cast<unsigned>(cells), changed);
-            CHECK(cudaGetLastError());
-            CHECK(cudaMemcpy(&changedBlocks, changed, sizeof(unsigned), cudaMemcpyDeviceToHost));
+            changedBlocks = coverageChangedBlocks(current, next, cells, changed);
         }
         kernelMs = loop.ms();
     }

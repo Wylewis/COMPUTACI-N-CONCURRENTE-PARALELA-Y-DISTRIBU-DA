@@ -39,6 +39,7 @@ void GeneratorThread::run() {
 
         for (const Created& c : created) {
             logger_.publish(Event::orderCreated(clock_.nowMs(), c.id, c.restaurant, c.urgent));
+            if (observer_) observer_(c.restaurant);
         }
         created_.fetch_add(static_cast<std::int64_t>(created.size()), std::memory_order_acq_rel);
 

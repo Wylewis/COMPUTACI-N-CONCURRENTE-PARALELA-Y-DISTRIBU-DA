@@ -28,6 +28,8 @@ function(apply_sanitizers target)
   endif()
 endfunction()
 
+option(USE_CUDA "Compilar los kernels .cu con nvcc para una GPU NVIDIA; apagado, los mismos .cu se compilan como C++ con la emulacion de ec2/common/cuda_compat.h" OFF)
+
 find_package(Threads REQUIRED)
 find_package(OpenCV CONFIG)
 if(OpenCV_FOUND)
@@ -49,7 +51,6 @@ add_executable(delivery_sim
   src/distance_table.cpp
   src/distance_table_parallel.cpp
   src/map_projection.cpp
-  src/thread_pool.cpp
   src/hardware.cpp
   src/stop_signal.cpp
   src/event_logger.cpp
@@ -64,14 +65,81 @@ add_executable(delivery_sim
   src/restaurants.cpp
   src/breakdown.cpp
   src/live_counters.cpp
+  src/eta_service.cpp
+  src/bench/bench.cpp
+  src/bench/bench_apps.cpp
 )
+target_include_directories(delivery_sim PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Kernels de GPU: una biblioteca con los .cu. Con USE_CUDA los compila nvcc; sin
+# ella son C++17 normal sobre la emulacion del curso, asi el proyecto se
+# construye y se prueba en una maquina sin GPU.
+set(GPU_SOURCES
+  src/gpu/gpu_backend.cu
+  src/gpu/travel_table.cu
+  src/gpu/eta_batch.cu
+  src/gpu/argmin_rows.cu
+  src/gpu/group_orders.cu
+  src/gpu/delivery_histogram.cu
+  src/gpu/demand_heatmap.cu
+  src/gpu/coverage_field.cu
+  src/gpu/delivery_kpis.cu
+  src/gpu/backlog_curve.cu
+  src/gpu/restaurant_slots.cu
+  src/gpu/demand_trend.cu
+  src/gpu/response_field.cu
+  src/gpu/through_restaurant.cu
+  src/gpu/round_trip_reach.cu
+)
+if(USE_CUDA)
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES native)
+  endif()
+  enable_language(CUDA)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  find_package(CUDAToolkit REQUIRED)
+  message(STATUS "USE_CUDA: kernels compilados con nvcc ${CMAKE_CUDA_COMPILER_VERSION}")
+else()
+  set_source_files_properties(${GPU_SOURCES} PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-x;c++")
+  message(STATUS "USE_CUDA apagado: kernels compilados como C++ con la emulacion de cuda_compat.h")
+endif()
+add_library(delivery_gpu STATIC ${GPU_SOURCES}
+  src/gpu/gpu_worker.cpp
+  src/gpu/gpu_kernels.cpp
+  src/gpu/travel_table_cpu.cpp
+  src/gpu/eta_batch_cpu.cpp
+  src/gpu/argmin_rows_cpu.cpp
+  src/gpu/group_orders_cpu.cpp
+  src/gpu/delivery_histogram_cpu.cpp
+  src/gpu/demand_heatmap_cpu.cpp
+  src/gpu/coverage_field_cpu.cpp
+  src/gpu/delivery_kpis_cpu.cpp
+  src/gpu/backlog_curve_cpu.cpp
+  src/gpu/restaurant_slots_cpu.cpp
+  src/gpu/demand_trend_cpu.cpp
+  src/gpu/response_field_cpu.cpp
+  src/gpu/through_restaurant_cpu.cpp
+  src/gpu/round_trip_reach_cpu.cpp
+  src/thread_pool.cpp
+)
+target_include_directories(delivery_gpu PUBLIC ${CMAKE_SOURCE_DIR}/src/gpu ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(delivery_gpu SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/ec2/common)
+target_link_libraries(delivery_gpu PUBLIC Threads::Threads)
+if(USE_CUDA)
+  target_link_libraries(delivery_gpu PUBLIC CUDA::cudart)
+  target_compile_definitions(delivery_gpu PUBLIC USE_CUDA=1)
+else()
+  target_compile_options(delivery_gpu PRIVATE -Wall -Wextra)
+endif()
+apply_sanitizers(delivery_gpu)
 
 # nlohmann/json (header unico, MIT) vive en third_party/. Se incluye como SYSTEM
 # para que sus cabeceras no generen warnings bajo -Wall -Wextra.
 target_include_directories(delivery_sim SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 
 target_compile_options(delivery_sim PRIVATE -Wall -Wextra)
-target_link_libraries(delivery_sim PRIVATE Threads::Threads)
+target_link_libraries(delivery_sim PRIVATE Threads::Threads delivery_gpu)
 if(OpenCV_FOUND)
   target_sources(delivery_sim PRIVATE src/window.cpp src/fleet_view.cpp)
   target_include_directories(delivery_sim SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
@@ -99,6 +167,39 @@ apply_sanitizers(delivery_sim)
 
 # Pruebas unitarias: se construyen con `make` y se ejecutan con `ctest`.
 enable_testing()
+
+# Pruebas de los kernels: cada una enlaza la biblioteca delivery_gpu, con nvcc
+# o con la emulacion segun USE_CUDA.
+function(add_gpu_test name)
+  add_executable(${name} tests/gpu/${name}.cpp ${ARGN})
+  target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_include_directories(${name} SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+  target_compile_options(${name} PRIVATE -Wall -Wextra)
+  target_link_libraries(${name} PRIVATE delivery_gpu)
+  apply_sanitizers(${name})
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
+add_gpu_test(gpu_backend_test)
+add_gpu_test(gpu_worker_test)
+add_gpu_test(travel_table_test)
+add_gpu_test(gpu_occupancy_test)
+add_gpu_test(eta_batch_test)
+add_gpu_test(argmin_rows_test)
+add_gpu_test(group_orders_test)
+add_gpu_test(delivery_histogram_test)
+add_gpu_test(demand_heatmap_test)
+add_gpu_test(coverage_field_test)
+add_gpu_test(delivery_kpis_test)
+add_gpu_test(backlog_curve_test)
+add_gpu_test(restaurant_slots_test)
+add_gpu_test(demand_trend_test)
+add_gpu_test(response_field_test)
+add_gpu_test(through_restaurant_test)
+add_gpu_test(round_trip_reach_test)
+add_gpu_test(eta_service_test
+  src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/estimate.cpp src/courier_thread.cpp src/breakdown.cpp
+  src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp src/route_motion.cpp src/graph.cpp
+  src/order.cpp src/config.cpp src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 
 add_executable(order_test tests/order_test.cpp src/order.cpp)
 target_include_directories(order_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -211,24 +312,24 @@ apply_sanitizers(fleet_test)
 add_test(NAME fleet_test COMMAND fleet_test)
 
 add_executable(breakdown_stress_test tests/breakdown_stress_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(breakdown_stress_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(breakdown_stress_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(breakdown_stress_test PRIVATE -Wall -Wextra)
-target_link_libraries(breakdown_stress_test PRIVATE Threads::Threads)
+target_link_libraries(breakdown_stress_test PRIVATE Threads::Threads delivery_gpu)
 apply_sanitizers(breakdown_stress_test)
 add_test(NAME stress_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_stress_test.sh $<TARGET_FILE:breakdown_stress_test>)
 
 add_executable(dispatcher_thread_test tests/dispatcher_thread_test.cpp
-  src/dispatcher_thread.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
+  src/dispatcher_thread.cpp src/eta_service.cpp src/fleet.cpp src/dispatch_select.cpp src/thread_pool.cpp src/courier_thread.cpp src/breakdown.cpp src/live_counters.cpp src/restaurants.cpp src/restaurant.cpp src/courier.cpp
   src/order_book.cpp src/estimate.cpp src/route_motion.cpp src/graph.cpp src/order.cpp src/config.cpp
   src/event_logger.cpp src/event_log.cpp src/sim_clock.cpp src/stop_signal.cpp)
 target_include_directories(dispatcher_thread_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(dispatcher_thread_test SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_options(dispatcher_thread_test PRIVATE -Wall -Wextra)
-target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads)
+target_link_libraries(dispatcher_thread_test PRIVATE Threads::Threads delivery_gpu)
 apply_sanitizers(dispatcher_thread_test)
 add_test(NAME dispatcher_thread_test COMMAND dispatcher_thread_test)
 
@@ -306,6 +407,7 @@ add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
 # Integracion: corridas completas por tiempo cumplido, SIGINT y SIGTERM,
 # verificadas con el verificador del log.
+add_test(NAME bench_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_bench_test.sh $<TARGET_FILE:delivery_sim>)
 add_test(NAME experiments_test COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_experiments_test.sh $<TARGET_FILE:delivery_sim>)
 add_test(NAME sim_tests COMMAND sh ${CMAKE_SOURCE_DIR}/tests/run_sim_tests.sh $<TARGET_FILE:delivery_sim>)
 

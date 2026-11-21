@@ -4,6 +4,11 @@
 #include <utility>
 
 #include "dispatch_select.h"
+#include "estimate.h"
+#include "eta_service.h"
+
+static_assert(kEtaPickupHandoverMs == kPickupHandoverMs && kEtaDeliveryHandoverMs == kDeliveryHandoverMs,
+              "la estimacion por lote usa los mismos tiempos de entrega en mano que la estimacion por ruta");
 
 DispatcherThread::DispatcherThread(const RestaurantConfig& restaurant, OrderBook& book, Fleet& fleet,
                                    const Graph& graph, double speedKmh, const DispatchConfig& dispatch,
@@ -49,7 +54,61 @@ void DispatcherThread::rejectExpired() {
     }
 }
 
+void DispatcherThread::useTravelTable(const TravelTable* table, EtaService* service) {
+    table_ = table;
+    etaService_ = service;
+}
+
+DispatcherThread::Outcome DispatcherThread::dispatchWithTable(Order& order) {
+    const int restaurantNode = static_cast<int>(graph_.nodeIndex(restaurant_.node));
+    const int deliveryNode = static_cast<int>(graph_.nodeIndex(order.deliveryNode));
+    while (!stop_.requested()) {
+        std::string chosen;
+        if (estimator_ == "gpu") {
+            auto pending = etaService_->request(restaurantNode, deliveryNode, static_cast<int>(order.readyAtMs));
+            if (pending.wait_for(quoteTimeout_) != std::future_status::ready) {
+                lateQuotes_.fetch_add(1, std::memory_order_acq_rel);
+                return Outcome::NoCourier;
+            }
+            const EtaService::Reply reply = pending.get();
+            if (reply.retry) {
+                retries_.fetch_add(1, std::memory_order_acq_rel);
+                continue;
+            }
+            if (!reply.found) return Outcome::NoCourier;
+            chosen = reply.courierId;
+        } else {
+            const std::int64_t now = clock_.nowMs();
+            const std::vector<CourierSnapshot> fleet = fleet_.snapshots(now);
+            EtaInput input;
+            input.nowMs = static_cast<int>(now);
+            input.orderRestaurantNode = {restaurantNode};
+            input.orderDeliveryNode = {deliveryNode};
+            input.orderReadyMs = {static_cast<int>(order.readyAtMs)};
+            for (const CourierSnapshot& c : fleet) {
+                input.courierNode.push_back(static_cast<int>(graph_.nodeIndex(c.node)));
+                input.courierAvailableMs.push_back(static_cast<int>(c.availableAtMs));
+                input.courierFree.push_back(!c.broken && c.bagCount < c.bagCapacity ? 1 : 0);
+            }
+            std::vector<int> eta(fleet.size(), kEtaUnavailable);
+            etaBatchCpu(*table_, input, eta.data());
+            std::size_t best = fleet.size();
+            for (std::size_t c = 0; c < eta.size(); ++c)
+                if (eta[c] != kEtaUnavailable && (best == fleet.size() || eta[c] < eta[best])) best = c;
+            if (best == fleet.size()) return Outcome::NoCourier;
+            chosen = fleet[best].id;
+        }
+        if (fleet_.assign(chosen, order)) {
+            assigned_.fetch_add(1, std::memory_order_acq_rel);
+            return Outcome::Assigned;
+        }
+        retries_.fetch_add(1, std::memory_order_acq_rel);
+    }
+    return Outcome::Stopped;
+}
+
 DispatcherThread::Outcome DispatcherThread::dispatch(Order& order) {
+    if (table_ && (estimator_ == "table" || (estimator_ == "gpu" && etaService_))) return dispatchWithTable(order);
     while (!stop_.requested()) {
         const std::int64_t now = clock_.nowMs();
 

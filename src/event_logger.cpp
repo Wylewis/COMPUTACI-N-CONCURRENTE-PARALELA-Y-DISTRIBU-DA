@@ -59,3 +59,38 @@ Summary EventLogger::summary() const {
     }
     return log_.summary();
 }
+
+std::vector<int> EventLogger::deliveryTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los tiempos de entrega solo son definitivos despues de close()");
+    }
+    return log_.deliveryTimesMs();
+}
+
+std::vector<std::int64_t> EventLogger::createdTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("las horas de creacion solo son definitivas despues de close()");
+    }
+    return log_.createdTimesMs();
+}
+
+std::vector<std::int64_t> EventLogger::closedTimesMs() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("las horas de cierre solo son definitivas despues de close()");
+    }
+    return log_.closedTimesMs();
+}
+
+std::vector<int> EventLogger::createdRestaurants() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los restaurantes de los pedidos solo son definitivos despues de close()");
+    }
+    return log_.createdRestaurants();
+}
+
+std::vector<std::string> EventLogger::restaurantNames() const {
+    if (!closedFlag_.load(std::memory_order_acquire) || writer_.joinable()) {
+        throw std::logic_error("los restaurantes de los pedidos solo son definitivos despues de close()");
+    }
+    return log_.restaurantNames();
+}

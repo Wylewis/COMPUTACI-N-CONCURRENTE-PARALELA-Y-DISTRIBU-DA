@@ -1,5 +1,6 @@
 #include "fleet_view.h"
 
+#include <algorithm>
 #include <array>
 #include <opencv2/imgproc.hpp>
 
@@ -85,4 +86,51 @@ void drawFleet(cv::Mat& frame, const MapProjection& proj, const Graph& graph,
     drawDeliveryPoints(frame, proj, graph, fleet);
     drawCouriers(frame, proj, graph, fleet, nowMs);
     drawStatePanel(frame, fleet, nowMs);
+}
+
+void drawHeatmap(cv::Mat& frame, const std::vector<float>& heat, int grid) {
+    if (grid <= 0 || frame.empty() || heat.size() != static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid)) return;
+    float peak = 0.0f;
+    for (const float v : heat) peak = std::max(peak, v);
+    if (peak <= 0.0f) return;
+    const cv::Mat field(grid, grid, CV_32F, const_cast<float*>(heat.data()));
+    cv::Mat stretched;
+    cv::resize(field, stretched, frame.size(), 0, 0, cv::INTER_LINEAR);
+    for (int row = 0; row < frame.rows; ++row) {
+        const float* values = stretched.ptr<float>(row);
+        cv::Vec3b* pixels = frame.ptr<cv::Vec3b>(row);
+        for (int col = 0; col < frame.cols; ++col) {
+            const float level = std::min(1.0f, values[col] / peak);
+            if (level < 0.05f) continue;
+            const float alpha = 0.65f * level;
+            const float color[3] = {30.0f * level, 220.0f - 190.0f * level, 255.0f - 25.0f * level};
+            for (int k = 0; k < 3; ++k)
+                pixels[col][k] = cv::saturate_cast<uchar>(static_cast<float>(pixels[col][k]) * (1.0f - alpha) + color[k] * alpha);
+        }
+    }
+}
+
+void drawCoverage(cv::Mat& frame, const std::vector<int>& field, int grid, int unreached) {
+    if (grid <= 0 || frame.empty() || field.size() != static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid)) return;
+    int peak = 0;
+    for (const int v : field)
+        if (v < unreached) peak = std::max(peak, v);
+    std::vector<float> levels(field.size(), -1.0f);
+    for (std::size_t p = 0; p < field.size(); ++p)
+        if (field[p] < unreached) levels[p] = peak > 0 ? static_cast<float>(field[p]) / static_cast<float>(peak) : 0.0f;
+    const cv::Mat cells(grid, grid, CV_32F, levels.data());
+    cv::Mat stretched;
+    cv::resize(cells, stretched, frame.size(), 0, 0, cv::INTER_NEAREST);
+    const float alpha = 0.5f;
+    for (int row = 0; row < frame.rows; ++row) {
+        const float* values = stretched.ptr<float>(row);
+        cv::Vec3b* pixels = frame.ptr<cv::Vec3b>(row);
+        for (int col = 0; col < frame.cols; ++col) {
+            const float level = values[col];
+            if (level < 0.0f) continue;
+            const float color[3] = {50.0f, 200.0f - 160.0f * level, 60.0f + 190.0f * level};
+            for (int k = 0; k < 3; ++k)
+                pixels[col][k] = cv::saturate_cast<uchar>(static_cast<float>(pixels[col][k]) * (1.0f - alpha) + color[k] * alpha);
+        }
+    }
 }

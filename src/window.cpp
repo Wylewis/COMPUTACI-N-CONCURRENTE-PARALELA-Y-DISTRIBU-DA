@@ -46,6 +46,7 @@ bool MapWindow::show(const cv::Mat& frame, int waitMs) {
     }
     cv::imshow(kTitle, frame);
     const int key = cv::waitKey(waitMs > 0 ? waitMs : 1);
+    lastKey_ = key;
     if (key == 'q' || key == 27) return false;
     return cv::getWindowProperty(kTitle, cv::WND_PROP_VISIBLE) >= 1.0;
 }

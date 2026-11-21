@@ -198,8 +198,9 @@ Config loadConfig(const std::string& path) {
 }
 
 void validateConfig(const Config& cfg) {
-    if (cfg.dispatch.estimator != "serial" && cfg.dispatch.estimator != "async" && cfg.dispatch.estimator != "pool") {
-        throw ConfigError("dispatch.estimator debe ser serial, async o pool");
+    if (cfg.dispatch.estimator != "serial" && cfg.dispatch.estimator != "async" && cfg.dispatch.estimator != "pool" &&
+        cfg.dispatch.estimator != "table" && cfg.dispatch.estimator != "gpu") {
+        throw ConfigError("dispatch.estimator debe ser serial, async, pool, table o gpu");
     }
     if (cfg.nodes.empty()) {
         throw ConfigError("'nodes' debe tener al menos un nodo");

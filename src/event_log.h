@@ -74,6 +74,11 @@ public:
     Summary summary() const;
     std::int64_t linesWritten() const { return lines_; }
     std::int64_t clockFixes() const { return clockFixes_; }
+    const std::vector<int>& deliveryTimesMs() const { return deliveryMs_; }
+    const std::vector<std::int64_t>& createdTimesMs() const { return createdMs_; }
+    const std::vector<std::int64_t>& closedTimesMs() const { return closedMs_; }
+    const std::vector<int>& createdRestaurants() const { return createdRestaurant_; }
+    const std::vector<std::string>& restaurantNames() const { return restaurantNames_; }
 
 private:
     std::ofstream out_;
@@ -83,6 +88,12 @@ private:
 
     Summary summary_;
     std::int64_t deliveredTotalMs_ = 0;
+    std::vector<int> deliveryMs_;
+    std::vector<std::int64_t> createdMs_;
+    std::vector<std::int64_t> closedMs_;
+    std::vector<int> createdRestaurant_;
+    std::vector<std::string> restaurantNames_;
+    std::unordered_map<std::string, int> restaurantIndex_;
     std::int64_t urgentTotalMs_ = 0;
     std::unordered_set<std::string> urgent_;
     std::unordered_map<std::string, std::int64_t> createdAt_;

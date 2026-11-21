@@ -54,6 +54,35 @@ int main() {
     for (int x = 0; x < frame.cols; ++x) dark += !isColor(frame.at<cv::Vec3b>(33, x), {255, 255, 255});
     check(isColor(frame.at<cv::Vec3b>(24, 1), {255, 255, 255}) && dark > 50, "la segunda linea de la banda lleva los contadores");
 
+    {
+        cv::Mat map(200, 200, CV_8UC3, cv::Scalar(255, 255, 255));
+        std::vector<float> heat(16, 0.0f);
+        drawHeatmap(map, heat, 4);
+        check(isColor(map.at<cv::Vec3b>(20, 20), {255, 255, 255}), "sin demanda el mapa de calor no pinta nada");
+        heat[0] = 3.0f;
+        drawHeatmap(map, heat, 4);
+        const cv::Vec3b hot = map.at<cv::Vec3b>(20, 20);
+        check(hot[2] > hot[1] && hot[2] > hot[0] && hot[1] < 200, "la celda con mas demanda se tine de rojo");
+        check(isColor(map.at<cv::Vec3b>(180, 180), {255, 255, 255}), "lejos de la demanda el mapa queda como estaba");
+        drawHeatmap(map, heat, 5);
+        check(isColor(map.at<cv::Vec3b>(180, 180), {255, 255, 255}), "una cuadricula que no coincide con los datos se ignora");
+    }
+    {
+        cv::Mat map(200, 200, CV_8UC3, cv::Scalar(255, 255, 255));
+        const int far = 1 << 29;
+        std::vector<int> field(16, far);
+        drawCoverage(map, field, 4, far);
+        check(isColor(map.at<cv::Vec3b>(20, 20), {255, 255, 255}), "sin celdas cubiertas el campo de cobertura no pinta nada");
+        field[0] = 0;
+        field[15] = 9000;
+        drawCoverage(map, field, 4, far);
+        const cv::Vec3b near = map.at<cv::Vec3b>(20, 20), distant = map.at<cv::Vec3b>(180, 180);
+        check(near[1] > near[2] && distant[2] > distant[1], "la celda con una moto libre queda verde y la mas lejana roja");
+        check(isColor(map.at<cv::Vec3b>(20, 180), {255, 255, 255}), "una celda sin alcanzar queda como estaba");
+        drawCoverage(map, field, 5, far);
+        check(isColor(map.at<cv::Vec3b>(20, 180), {255, 255, 255}), "un campo que no coincide con la cuadricula se ignora");
+    }
+
     if (failures == 0) {
         std::cout << "fleet_view_test: todas las pruebas pasaron\n";
         return 0;

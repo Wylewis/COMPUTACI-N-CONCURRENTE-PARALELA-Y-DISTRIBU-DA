@@ -1,6 +1,8 @@
 #include "event_log.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include "nlohmann/json.hpp"
@@ -155,6 +157,13 @@ void EventLog::write(const Event& event) {
     switch (e.type) {
         case EventType::OrderCreated:
             ++summary_.created;
+            createdMs_.push_back(e.t);
+            {
+                const std::string name = e.restaurant ? *e.restaurant : std::string();
+                const auto found = restaurantIndex_.emplace(name, static_cast<int>(restaurantNames_.size()));
+                if (found.second) restaurantNames_.push_back(name);
+                createdRestaurant_.push_back(found.first->second);
+            }
             if (e.order) createdAt_[*e.order] = e.t;
             if (e.urgent && *e.urgent) {
                 ++summary_.urgentCreated;
@@ -163,6 +172,7 @@ void EventLog::write(const Event& event) {
             break;
         case EventType::OrderDelivered: {
             ++summary_.delivered;
+            closedMs_.push_back(e.t);
             if (e.courier) ++summary_.deliveredPerCourier[*e.courier];
             std::int64_t elapsed = 0;
             if (e.order) {
@@ -170,6 +180,7 @@ void EventLog::write(const Event& event) {
                 if (it != createdAt_.end()) elapsed = e.t - it->second;
             }
             deliveredTotalMs_ += elapsed;
+            deliveryMs_.push_back(static_cast<int>(std::min<std::int64_t>(elapsed, std::numeric_limits<int>::max())));
             if (elapsed > summary_.maxDeliveryMs) summary_.maxDeliveryMs = elapsed;
             if (e.order && urgent_.count(*e.order)) {
                 ++summary_.urgentDelivered;
@@ -179,6 +190,7 @@ void EventLog::write(const Event& event) {
         }
         case EventType::OrderRejected:
             ++summary_.rejected;
+            closedMs_.push_back(e.t);
             break;
         case EventType::OrderReassigned:
             ++summary_.reassigned;

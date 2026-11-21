@@ -1,0 +1,368 @@
+# Equipetrol Delivery: detalle
+
+El paso a paso para compilar y correr está en el [README](../README.md). Acá queda el detalle de
+cada parte: los módulos, el mapa de conceptos, los experimentos, los pedidos urgentes, los datos
+del mapa, el modo de medición y las 14 aplicaciones de GPU.
+
+## Módulos
+
+Cada módulo tiene su prueba en `tests/` y su explicación en [INFORME.pdf](../INFORME.pdf) y en el mapa
+de conceptos de abajo. El código no lleva comentarios a propósito: esta tabla y el mapa son la
+explicación.
+
+| Módulo | Qué hace |
+|---|---|
+| `config` | Lee y valida el JSON (sección 5 del enunciado); sale con error antes de simular si algo falta o apunta a un nodo inexistente. |
+| `order` | El pedido: estados `created → assigned → pickedUp → delivered`, `rejected`, `pending`; solo movible, así existe en un único lugar a la vez. |
+| `sim_clock` | Reloj simulado sobre `steady_clock` con `timeScale`; inmutable tras arrancar. |
+| `event_log`, `event_logger` | Los eventos de la sección 6.2 (`orderCreated` lleva `urgent`) y el resumen 6.3 más `urgentCreated`, `urgentDelivered` y `avgUrgentDeliveryMs`; una cola productor-consumidor con un solo hilo escritor, una línea JSON por evento. |
+| `graph`, `distance_table`, `distance_table_parallel` | Grafo dirigido de calles con Dijkstra; tabla de distancias en serie y en paralelo (una tarea `std::async` por grupo de orígenes, escrituras disjuntas). |
+| `map_projection`, `route_motion` | Lat/lon a píxel; posición de una moto sobre su ruta en cualquier instante, objeto inmutable compartido por `shared_ptr`. |
+| `order_generator`, `generator_thread` | Pedidos a intervalos exponenciales con ráfagas, urgentes con `urgentProbability`, reproducibles por semilla; el hilo que los mete al libro durmiendo en la señal de parada. |
+| `order_book` | Monitor con un mutex y una cola por restaurante con su variable de condición; límite `maxPending` global; posición en cola por scan exclusivo. `take` elige por prioridad bajo el candado (envejecido, urgente, normal; dentro de cada nivel el más antiguo), `nextWakeMs` da el próximo plazo de la cola y `takeExpired` saca los vencidos. |
+| `estimate`, `dispatch_select` | Estimación de entrega como función pura sobre una copia de la moto; selección por anillos de radio creciente con map (serie, `async` o pool) y reduce. |
+| `dispatcher_thread` | Un hilo por restaurante: rechaza los vencidos de su cola, toma por prioridad, copia la flota, estima en el pool, reserva; reintenta si otro ganó la moto; sin moto devuelve el pedido al libro y duerme hasta que algo cambie o venza el próximo plazo. |
+| `courier`, `courier_thread` | La moto como monitor (mochila con reserva atómica, copias para estimar y dibujar, traspaso con `scoped_lock`) y su hilo (duerme en su cv, viaja tramo a tramo, hace fila, recoge, entrega el destino más cercano, se avería y rescata). |
+| `restaurant`, `restaurants` | Monitor con `pickupSlots` puestos y fila por orden de llegada; espera prevista por scan. |
+| `fleet` | Dueña de motos e hilos; copias de la flota; versión más cv para esperar sin sondeo; elección de la moto de rescate. |
+| `breakdown` | Sorteo de averías con un generador por moto derivado de la semilla; recuperación tras `kRepairMs`. |
+| `thread_pool`, `hardware` | Pool con cola, `packaged_task` y `notify_all` al parar; tamaño por `hardware_concurrency` acotado entre 2 y 32. |
+| `stop_signal` | Bandera atómica más cv; SIGINT/SIGTERM convertidos en la orden de parar por un pipe y un hilo vigía. |
+| `live_counters` | Contadores por moto, cada uno en su línea de caché, con `fetch_add` relajado. |
+| `window`, `fleet_view` | Ventana OpenCV: capa estática (mapa, calles, restaurantes, atribución) y capa viva (motos por estado, entregas, panel de la sección 6.3), siempre desde copias. Con la tecla `h` dibuja el mapa de calor de demanda y con `c` el campo de cobertura. |
+| `demand_log` | Monitor con la hora y el lugar de cada pedido creado; de ahí sale el mapa de calor de los últimos diez minutos. |
+| `eta_service` | Coordinador de rondas del estimador `gpu`: junta los pedidos que esperan estimación, saca una copia de la flota y hace un solo lanzamiento por ronda; cada despachador espera su respuesta por un `future`, con `quoteTimeoutMs`. |
+| `gpu/gpu_worker` | El único hilo que usa la GPU: una cola de tareas y un `future` por resultado. |
+| `gpu/gpu_backend`, `gpu_timing`, `gpu_occupancy`, `gpu_kernels` | Detección de la GPU, cronómetros de kernel con eventos CUDA y ocupación de cada kernel. |
+| `gpu/<aplicación>` | Las 14 aplicaciones de GPU, cada una con su kernel (`.cu`), sus versiones de CPU (`_cpu.cpp`) y su prueba en `tests/gpu/`. Están en la tabla de "Aplicaciones de GPU". |
+| `bench/` | El modo de medición: corre las cuatro versiones de cada aplicación, comprueba el resultado y escribe el CSV. |
+| `main` | Arranque (tabla de tiempos, flota, despachadores, generador), bucle de dibujo, apagado ordenado en menos de 5 s y el resumen final con los resultados de las aplicaciones. |
+
+## Mapa de conceptos
+
+Las dieciséis filas de la sección 10 del enunciado. Para cada una, el archivo y el lugar donde se usa
+el concepto, y por qué es el correcto ahí y qué saldría mal sin él.
+
+| Carpeta · concepto | Archivo y lugar | Por qué es el correcto ahí |
+|---|---|---|
+| 01 · Creación explícita de hilos y un destino deliberado (join) para cada hilo | `generator_thread.cpp`, `dispatcher_thread.cpp`, `courier_thread.cpp`, `event_logger.cpp`, `stop_signal.cpp` (`SignalWatcher`), `thread_pool.cpp`: cada uno crea su `std::thread` en `start()` y lo une en `join()`, que también llama el destructor; `main.cpp` fija el orden de los `join` en el apagado | Cada hilo tiene un dueño que lo une antes de destruir lo que el hilo usa. Sin eso, un hilo abandonado tocaría objetos ya destruidos al salir, y el enunciado exige que ninguno quede abandonado. |
+| 01 · Una decisión que depende del paralelismo disponible | `hardware.cpp`: `recommendedPoolSize()` dimensiona el pool con `hardware_concurrency` acotado entre 2 y 32 (`main.cpp`), y `defaultTaskCount()` reparte la tabla de distancias en tantas tareas como hilos (`distance_table_parallel.cpp`) | Más tareas que núcleos solo añaden cambios de contexto (el barrido del experimento baja de 8,9x a 7,0x con 36 tareas); menos desaprovechan la máquina. Un número fijo sería correcto solo en la máquina donde se escribió. |
+| 02 · Datos a un hilo por valor, por referencia y por move, cada uno donde es la elección correcta | Por referencia: `CourierThread` recibe `Courier&`, `Graph&`, `Restaurants&`, objetos que viven más que el hilo. Por valor: las tareas de estimación capturan su `CourierSnapshot` (`dispatch_select.cpp`, `[one, c]`) y una copia del pedido en `shared_ptr` (`dispatcher_thread.cpp`). Por move: `GeneratorThread` mueve la ráfaga al libro con `submit(OrderBatch&&)` | Una referencia a algo que muere antes que el hilo es un puntero colgante: una estimación tardía leería un pedido ya movido a la moto. Copiar lo que vive menos y referenciar lo que vive más es la regla. |
+| 02 · Pedidos que viajan por el sistema mediante move semantics, existiendo en un solo lugar a la vez | `order.h`: `Order` es solo movible (copia borrada). `order_book.cpp` (`submit`, `take`, `putBack`), `courier.cpp` (`reserve`, `removeOrder`, `takeBag`, `takeOverFrom`) lo mueven de un dueño al siguiente | Si el pedido se copiara, podría estar en el libro y en una mochila a la vez, que es exactamente lo que la sección 4 prohíbe; el compilador lo impide. |
+| 03 · Funciones miembro de objetos compartidos ejecutándose en hilos; contenedores de hilos | Cada hilo corre una función miembro (`[this] { run(); }`); `thread_pool.cpp` guarda sus trabajadores en un `std::vector<std::thread>` y `fleet.cpp` las motos y sus hilos en vectores de `unique_ptr` | El objeto vive más que su hilo porque el destructor une antes de liberar los miembros; el contenedor permite arrancar y unir N hilos con un bucle, con N decidido en tiempo de ejecución. |
+| 03 · Propiedad compartida que garantiza el tiempo de vida; ningún puntero crudo propietario | `courier.h`: el viaje en curso es `std::shared_ptr<const RouteMotion>`, compartido entre la moto y las copias que dibuja la ventana; `thread_pool.h`: la `packaged_task` va en `shared_ptr` para que la cola la copie; `fleet.cpp` y `restaurants.cpp` poseen con `unique_ptr` | La ventana puede seguir dibujando un viaje cuando la moto ya empezó otro: el objeto vive mientras alguien lo use y se libera solo. Con un puntero crudo habría que decidir quién borra, y acertar siempre. |
+| 04 · Tareas que devuelven un resultado a través de un future, con política de lanzamiento explícita | `distance_table_parallel.cpp` y `dispatch_select.cpp` (`estimateAllAsync`): `std::async(std::launch::async, …)`; `thread_pool.h`: `submit` devuelve el `future` de una `packaged_task` | `launch::async` garantiza un hilo; con la política por defecto la tarea podría ser diferida y ejecutarse en el `get()`, en el hilo del despachador, que es lo contrario de lo que se quiere. |
+| 04 · Un par promise/future como canal de un solo uso entre dos hilos | `thread_pool.h` y `dispatch_select.cpp` (`collect`): cada estimación es una `packaged_task` (una promesa con su callable) cuyo `future` el despachador consume una sola vez con `get()` | El resultado cruza del hilo del pool al despachador exactamente una vez, con el valor o con la excepción; una cola o una variable compartida obligarían a sincronizar a mano un dato que se produce una sola vez. |
+| 04 · Una espera con límite de tiempo, y una excepción que cruza de un hilo a otro | `dispatch_select.cpp` (`collect`): `wait_until(deadline)` con un único instante para todos los futures y `get()` que relanza el `EstimateError` lanzado en el hilo de la tarea; `fleet.cpp` (`waitForChange` con plazo) y `stop_signal.h` (`waitUntil`) usan `wait_until` con `steady_clock` | El enunciado pide `quoteTimeoutMs` y que un fallo de estimación llegue como error: el `future` transporta la excepción y el plazo acota la espera. Con `system_clock` un cambio de hora movería los plazos. |
+| 05 · Un argumento escrito, por cada objeto compartido, de por qué no es posible un data race sobre él | La tabla de abajo, y las secciones de cada módulo en este README | Sin el argumento se confía en que "se ve bien"; ThreadSanitizer confirma, pero no explica. |
+| 05 · Un tipo que es seguro copiar o mover porque sus funciones miembro especiales son correctas | `order.h`: `Order` con copia borrada y move por defecto; `courier.h`, `restaurant.h`, `fleet.h`, `thread_pool.h`, `courier_thread.h`: copia borrada porque contienen un mutex o un hilo; `CourierSnapshot`, `CourierView`, `BagItem`: copiables porque solo tienen valores y un `shared_ptr<const>` | Copiar un objeto con mutex duplicaría un cerrojo que protege un estado que no se duplica; borrar la copia lo hace imposible. Las copias que sí existen son las que la ventana y la estimación necesitan. |
+| 06 · Exclusión mutua solo mediante locks ligados a un ámbito; secciones críticas cortas | `std::lock_guard` y `std::unique_lock` en todos los monitores; `order_book.cpp` y `fleet.cpp` notifican fuera del cerrojo; `event_logger.cpp` intercambia la cola bajo el cerrojo y escribe fuera; `courier_thread.cpp` (`SlotGuard`) devuelve el puesto del restaurante en toda salida | Un `lock` manual se olvida en un `return` temprano o en una excepción y deja el cerrojo tomado para siempre; el RAII lo suelta siempre. Las secciones cortas evitan que la E/S o un Dijkstra retengan a los demás. |
+| 06 · Una operación que necesita dos locks a la vez, y la razón por la que no puede producir deadlock | `courier.cpp` (`takeOverFrom`): `std::scoped_lock lock(mutex_, broken.mutex_)` toma los dos cerrojos de las mochilas con el algoritmo de `std::lock`, sin orden fijo y sin interbloqueo aunque dos rescates se crucen; en el resto del programa ningún monitor llama a otro bajo su cerrojo | Tomarlos uno tras otro permitiría que dos traspasos cruzados se esperaran mutuamente; el traspaso debe ser todo o nada para que ningún observador vea un pedido en dos mochilas o en ninguna. |
+| 07 · Objetos monitor: datos compartidos a los que no se puede acceder sin su lock | `order_book`, `restaurant`, `courier`, `fleet`, `event_logger`, `thread_pool`: datos privados, un mutex, y métodos públicos que lo toman; lo que sale, sale por copia o por move | Si el estado fuera accesible desde fuera, cada llamante tendría que recordar el cerrojo; el monitor lo garantiza en un solo lugar y las copias evitan retenerlo mientras se estima o se dibuja. |
+| 07 · Hilos que se bloquean hasta que se cumple una condición, despertados por otro hilo, robustos ante despertares que no traen novedades y ante un despertar final para el apagado | Todas las esperas usan `wait` con predicado: `courier_thread.cpp` (mochila cambió o rescate), `restaurant.cpp` (`waitForSlot`), `order_book.cpp` (`take`), `fleet.cpp` (`waitForChange` compara versiones), `thread_pool.cpp`, `event_logger.cpp`, `stop_signal.h`; el apagado despierta con `close`, `wake`, `stop` y `notify_all` | El predicado vuelve inofensivo un despertar espurio o uno sin novedad; comparar versiones evita el despertar perdido; sin el despertar final, un hilo dormido en una fila o en la flota nunca terminaría y el apagado no cumpliría los 5 s. |
+
+Objetos compartidos y por qué no hay data race sobre ellos:
+
+| Objeto | Argumento |
+|---|---|
+| grafo, tabla de distancias, configuración, proyección, reloj arrancado | Inmutables después de construirse en el hilo principal, antes de arrancar los demás; solo lecturas concurrentes. |
+| `RouteMotion` de cada viaje | Inmutable; se comparte por `shared_ptr<const>`, así nadie puede escribirlo. |
+| libro de pedidos | Un solo mutex para todo el estado; los pedidos entran y salen por move, nunca hay dos dueños. |
+| cada moto (`Courier`) | Todo acceso bajo su mutex; lo que otros hilos necesitan sale por copia (`estimateSnapshot`, `view`, `bagItems`). |
+| restaurante | Fila y puestos bajo un mutex; el puesto se devuelve con RAII. |
+| flota | La lista de motos es inmutable tras construir; la versión y los rescates pendientes van bajo su mutex. |
+| cola de eventos y archivo del log | La cola bajo mutex; el archivo lo escribe solo el hilo escritor; el resumen se lee después de `close`. |
+| contadores en vivo | Atómicos con un único escritor cada uno; la ventana solo lee; cada uno en su línea de caché. |
+| señal de parada | Un `atomic<bool>` que solo pasa de falso a verdadero, más una cv para despertar. |
+| cola del pool | Bajo mutex; la `packaged_task` se mueve al trabajador y su `future` tiene un solo consumidor. |
+## Experimentos
+
+`tools/run_experiments.py` corre `delivery_sim` con varias configuraciones derivadas de una base, en
+procesos paralelos, y agrega los resultados en una tabla Markdown con el JSON crudo al lado:
+
+```sh
+python3 tools/run_experiments.py --bin build/delivery_sim --config config/equipetrol.json \
+    --vary fleet.bagCapacity=1,2,3,4 --seeds 42,7,2024 --duration 1800 --scale 600 \
+    --jobs 4 --out tools/reports/exp_bag.md
+```
+
+`--vary` toma una ruta de clave del config y los valores a probar, y se puede repetir para combinar
+varias claves; `--set` fija otras claves en todas las corridas. Cada combinación se corre una vez
+por semilla, con `--no-window`; de cada corrida se toman el resumen final, el mensaje de cierre
+(asignados, reintentos, estimaciones tardías, averías, rescates) y el tiempo real, y el log se
+verifica con `check_log.py`. La tabla muestra las medias por configuración y cuántas corridas
+terminaron bien; `ctest` incluye una corrida mínima del corredor.
+
+### Experimento de despacho
+
+`tools/reports/exp_despacho.md` compara el map de estimaciones en serie, con una tarea `std::async`
+por candidato y sobre el pool. `dispatch_bench` (se construye con `make dispatch_bench`) mide el map
+aislado para anillos de 1 a 512 candidatos y para estimaciones artificialmente caras, y el corredor
+de experimentos corre la simulación completa con cada variante usando la clave de configuración
+`dispatch.estimator` (`serial`, `async` o `pool`; por defecto `pool`). El reporte incluye el
+análisis con la ley de Amdahl con sobrecarga y el cambio de diseño de `async` a pool con su antes y
+después.
+
+### Experimentos del sistema
+
+`tools/reports/exp_sistema.md` reúne cuatro experimentos: la tabla de distancias en serie frente a
+paralela por número de orígenes y el barrido de tareas (`distance_bench`, se construye con
+`make distance_bench`), y los puestos de recogida, la capacidad de la mochila y la probabilidad de
+avería variados uno a uno con el corredor sobre una hora simulada. El corredor admite `*` en la
+ruta de la clave para aplicar un valor a todos los elementos de una lista (`restaurants.*.pickupSlots`).
+## Pedidos urgentes
+
+Extensión del enunciado: algunos pedidos son urgentes y el despachador los atiende antes; un
+normal que espera más de `agingMs` envejece y pasa a tratarse con prioridad. Dos propiedades
+opcionales en `orders` del config, con valor por defecto 0: `urgentProbability` (en [0, 1]) y
+`agingMs` (entero simulado, 0 = sin envejecimiento).
+
+- El orden lo decide `OrderBook::take` bajo el candado del libro, en el momento de sacar: primero
+  los envejecidos (normales con `ahora − creación ≥ agingMs`), después los urgentes, después los
+  normales; dentro de cada nivel el más antiguo, y a igual instante el id menor. Que el envejecido
+  vaya por encima del urgente es una decisión propia: el envejecimiento existe para que nadie
+  espere para siempre.
+- Si no hay moto con lugar, el despachador devuelve el pedido al libro y duerme en la flota hasta
+  que entre un pedido, una moto libere lugar, venza el próximo plazo de su cola (el
+  `acceptTimeoutMs` o el envejecimiento más cercano, calculado por el libro) o se pida parar. Al
+  despertar rechaza con `noCourier` los vencidos que nunca tuvieron moto y vuelve a elegir.
+- `orderCreated` lleva `"urgent": true|false`; el resumen agrega `urgentCreated`,
+  `urgentDelivered` y `avgUrgentDeliveryMs`, y `check_log.py` los recalcula desde el log.
+
+### Cómo comprobarlo
+
+Dos configuraciones listas, derivadas de `config/equipetrol.json`: `config/urgentes_3_motos.json`
+(`urgentProbability` 0.3, `agingMs` 300000, 3 motos, para que se forme cola) y
+`config/urgentes_1_moto.json` (lo mismo con 1 moto y mochila 1, sin fin por tiempo). Desde `build`:
+
+```sh
+./delivery_sim ../config/urgentes_3_motos.json --no-window --log urgentes.log > resumen.txt
+python3 ../tools/check_log.py urgentes.log --summary resumen.txt --config ../config/urgentes_3_motos.json
+python3 ../tools/urgent_cases.py urgentes.log
+```
+
+La primera línea corre una hora simulada (un minuto real) y deja el log y el resumen; la segunda
+verifica el log y recalcula los tres contadores de urgentes; la tercera busca y muestra los dos
+casos de prioridad: un urgente creado después de un normal y asignado mientras ese normal
+seguía esperando, y un normal envejecido asignado mientras un urgente más nuevo seguía esperando. Para ver los urgentes
+en el log, `grep '"urgent":true' urgentes.log`.
+
+Para comprobar que el despachador duerme y no gira, con una sola moto y cola de pedidos:
+
+```sh
+./delivery_sim ../config/urgentes_1_moto.json --no-window --log una.log &
+sleep 10; ps -o %cpu,time -p $!; kill -INT $!
+```
+
+El uso de CPU del proceso queda en 0 %; la señal lo cierra en milisegundos y el log pasa el
+verificador. Con ThreadSanitizer, `cmake -DENABLE_TSAN=ON .. && make` en otra carpeta y los mismos
+comandos. Las corridas hechas con estos comandos, incluidas las de ThreadSanitizer, están sin editar en
+`tools/reports/variante_a_20261024.txt`.
+
+## Mapa y datos
+
+La imagen es de OpenStreetMap, recortada al polígono de la zona entre el Segundo y el Cuarto Anillo
+(`data/equipetrol_zone.json`), 712×991 píxeles, con sus límites en `config/equipetrol.json`. La red
+de calles se extrajo de OpenStreetMap: 320 intersecciones, 472 segmentos (314 de un solo sentido) y
+nueve restaurantes reales de la Av. San Martín. Los scripts que la generan, solo con la librería
+estándar de Python:
+
+```sh
+python3 tools/make_map.py --zone data/equipetrol_zone.json --zoom 16 --out data/equipetrol.png
+python3 tools/extract_network.py --zone data/equipetrol_zone.json --out data/equipetrol_network.json
+python3 tools/make_config.py
+```
+
+## Mediciones de CPU contra GPU
+
+El modo de medición corre sin ventana y escribe un CSV con una línea por corrida: aplicación,
+concepto, versión, hilos, tamaño, elementos, repetición, tiempo en milisegundos y si el resultado
+fue correcto. De ese archivo salen todas las tablas y gráficos.
+
+```sh
+./delivery_sim ../config/ciudad.json --headless --bench resultados.csv
+```
+
+Para cada aplicación y cada tamaño mide cuatro versiones: `cpu_1` (un hilo), `cpu_n` (multihilo
+sobre el pool), `gpu_kernel` (solo los kernels, con eventos CUDA) y `gpu_e2e` (kernels más copias
+y reserva de memoria). Hace una corrida de calentamiento y diez medidas, con las versiones
+intercaladas en cada repetición, y comprueba el resultado en todas. Una aplicación puede sumar
+filas `cpu_ref_<nombre>` con otro algoritmo de CPU de un hilo, como referencia. Opciones: `--bench-reps <n>`,
+`--bench-once` (una corrida sin calentamiento, para los perfiladores), `--bench-sweep` (la versión
+multihilo con 1, 2, 4... hilos), `--bench-threads <n>`, `--bench-apps <a,b>` y
+`--bench-max-items <n>`. Las versiones de GPU solo se miden con una GPU real: compilado con la
+emulación (`USE_CUDA` apagado) el CSV trae solo las de CPU, porque los tiempos de la emulación no
+dicen nada de una GPU.
+
+Una tarjeta que queda sin trabajo baja de frecuencia, y eso pasa dentro de cada repetición
+mientras corren las versiones de CPU. Por eso, justo antes de cada medida de GPU, el medidor
+lanza un kernel de referencia hasta que su tiempo vuelve al mejor que le conoce: la medida se
+toma con la tarjeta a régimen. Con `--bench-cold` no la despierta y mide como la encuentra.
+
+Para compilar con una GPU NVIDIA: `cmake -DUSE_CUDA=ON .. && make`. Todo kernel se lanza desde un
+único hilo dueño de la GPU (`src/gpu/gpu_worker`); los demás hilos le envían trabajo por una cola y
+esperan el resultado por un `future`.
+
+La ocupación de cada kernel la informa el propio programa, con
+`cudaOccupancyMaxActiveBlocksPerMultiprocessor` y los atributos de la función, para las máquinas
+donde Nsight Compute no puede leer los contadores de la tarjeta:
+
+```sh
+./delivery_sim ../config/equipetrol.json --gpu-info
+```
+
+Imprime el dispositivo y una línea por kernel: hilos por bloque, bloques activos por
+multiprocesador, registros por hilo, memoria compartida por bloque, ocupación y qué recurso la
+limita. Compilado con la emulación deja esas columnas vacías.
+
+Las mediciones están en `tools/reports/gpu/`, una carpeta por aplicación con los CSV de las dos
+máquinas, la tabla, los gráficos y un `analisis.md` con el experimento completo. Los scripts que
+las arman:
+
+| Script | Qué escribe |
+|---|---|
+| `tools/gpu_report.py` | La tabla por tamaño y los tres gráficos de una aplicación. |
+| `tools/gpu_summary.py` | `resumen.md` y `resumen.png`: una fila por aplicación, con el cruce y los mejores speedups. |
+| `tools/gpu_roofline.py` | `roofline.md` y `roofline.png`: cada kernel según su intensidad aritmética y su rendimiento. |
+| `tools/gpu_sim_metrics.py` | De un log de eventos, los pedidos asignados y entregados por hora y la demora de despacho. |
+
+En la misma carpeta, `ocupacion.md` tiene la malla y la ocupación de los 29 kernels y
+`simulacion.md` las corridas de una hora de la ciudad en CPU y en GPU. El resumen de todo, con las
+conclusiones, es [INFORME_GPU.pdf](../INFORME_GPU.pdf).
+
+### Aplicaciones de GPU
+
+Son 14: dos por cada uno de los conceptos 03 a 09 del curso. Cada aplicación tiene su versión de
+CPU de un hilo, su versión multihilo, su kernel y una prueba de que dan el mismo resultado. Con
+`--backend gpu` el programa usa los kernels; por defecto usa las versiones de CPU.
+
+| Aplicación | Concepto del curso | Dónde entra en el programa | Archivos |
+|---|---|---|---|
+| Tabla de tiempos de todos contra todos | 03, tiling y memoria compartida | Al arrancar; la usan las estimaciones | `src/gpu/travel_table.*` |
+| Estimación de entrega por lote | 04, accesos agrupados y estructura de arreglos | El despacho, con `--estimator table` (CPU) o `gpu` (por rondas) | `src/gpu/eta_batch.*`, `src/eta_service.*` |
+| Mejor moto de cada pedido | 08, reducción | Cada ronda del estimador `gpu`: la elección se hace en la tarjeta | `src/gpu/argmin_rows.*` |
+| Pedidos agrupados por restaurante | 09, scan | Cada ronda del estimador `gpu` se ordena por restaurante antes de estimar | `src/gpu/group_orders.*` |
+| Histograma de tiempos de entrega | 07, histograma | El resumen final de la simulación | `src/gpu/delivery_histogram.*` |
+| Mapa de calor de demanda | 05, convolución | Una capa sobre el mapa en la ventana (tecla `h`) y el resumen final | `src/gpu/demand_heatmap.*` |
+| Campo de cobertura de las motos libres | 06, stencil | Otra capa sobre el mapa en la ventana (tecla `c`) y el resumen final | `src/gpu/coverage_field.*` |
+| Indicadores de entrega | 08, reducción | El resumen final de la simulación | `src/gpu/delivery_kpis.*` |
+| Curva de pedidos en espera | 09, scan | El resumen final de la simulación | `src/gpu/backlog_curve.*` |
+| Pedidos por restaurante y franja horaria | 07, histograma | El resumen final de la simulación | `src/gpu/restaurant_slots.*` |
+| Tendencia de la demanda | 05, convolución | El resumen final de la simulación | `src/gpu/demand_trend.*` |
+| Campo de respuesta con motos ocupadas | 06, stencil | El resumen final de la simulación | `src/gpu/response_field.*` |
+| Restaurante mejor ubicado | 03, tiling y memoria compartida | Al arrancar, después de la tabla de tiempos | `src/gpu/through_restaurant.*` |
+| Mejor esquina para un restaurante nuevo | 04, accesos agrupados y corner turning | Al arrancar, después de la tabla de tiempos | `src/gpu/round_trip_reach.*` |
+
+La tabla de tiempos guarda, en milisegundos enteros, lo que tarda una moto entre cada par de
+intersecciones. En CPU es un Dijkstra desde cada nodo, repartido sobre el pool. En GPU es un
+producto de matrices min-plus en tiles de 16 por 16 cargados en memoria compartida, elevado al
+cuadrado hasta que deja de cambiar. Los pares sin camino quedan marcados con `kUnreachableMs`.
+
+La estimación por lote calcula la hora de entrega de cada par pedido × moto con dos lecturas a la
+tabla de tiempos. Los estimadores `serial`, `async` y `pool` recorren la red por cada estimación;
+`table` usa la tabla en CPU y `gpu` la usa en la tarjeta, donde queda residente. Con `gpu`, un
+coordinador junta los pedidos que esperan, hace un solo lanzamiento por ronda y reparte las motos
+dentro de la ronda. Se elige con `dispatch.estimator` en el config o con `--estimator`.
+
+La mejor moto de cada pedido es el mínimo de su fila en la matriz de estimaciones. En GPU hay un
+bloque por pedido: cada hilo recorre una parte de las motos y guarda su mejor, y el bloque junta
+los 256 candidatos en memoria compartida con un árbol de comparaciones. La clave que se compara
+lleva la hora de entrega en la parte alta y la moto en la baja, así el mínimo es único y da lo
+mismo en CPU y en GPU. En una ronda el kernel de estimación y el de elección corren seguidos sobre
+la tarjeta y solo baja una clave por pedido, no la matriz. Si dos pedidos de la misma ronda eligen
+el último lugar de la misma moto, el segundo vuelve a pedir estimación en la ronda siguiente.
+
+Agrupar los pedidos por restaurante es un ordenamiento por conteo en tres pasos: contar los
+pedidos de cada restaurante, hacer un scan exclusivo de esos conteos, que da dónde empieza el
+tramo de cada uno, y escribir cada pedido en su tramo. En GPU el scan es jerárquico: cada bloque
+resuelve 256 posiciones en memoria compartida, las sumas de los bloques se vuelven a escanear y
+se suman como desplazamiento. El conteo y la escritura usan atómicos, así que dentro de un tramo
+el orden no está fijado; las versiones de CPU dejan los pedidos en orden de llegada. El
+coordinador agrupa cada ronda antes de estimar, para que las filas vecinas de la matriz lean las
+mismas celdas de la tabla de tiempos, y devuelve cada respuesta a su pedido. Agrupa en CPU, o en
+la tarjeta con `--backend gpu`.
+
+El histograma cuenta cuántas entregas tardaron cada cantidad de minutos, un tramo por minuto. En
+GPU hay dos kernels: uno suma con atómicos directamente en los contadores globales, y otro le da
+a cada bloque un histograma propio en shared memory que se vuelca al final. Al terminar la
+simulación el programa imprime la mediana, el p90, el p99 y el minuto más cargado.
+
+El mapa de calor reparte en una cuadrícula de 64 por 64 los restaurantes de los pedidos de los
+últimos diez minutos simulados y la suaviza con una convolución de 7 por 7 con pesos gaussianos.
+En GPU los pesos van en memoria constante. Como son números decimales, la prueba compara la
+salida de GPU con la de CPU con una tolerancia de una parte en diez mil. En la ventana, la tecla
+`h` muestra u oculta la capa; al terminar, el programa informa la zona de mayor demanda.
+
+El campo de cobertura dice, para cada celda de la misma cuadrícula de 64 por 64, cuánto tardaría
+en llegar la moto libre más cercana. Las celdas con una moto libre valen cero y el resto empieza
+sin valor; en cada pasada, cada celda toma el menor entre su valor y el de sus cuatro vecinas más
+el tiempo de cruzar una celda, y se repite hasta que nada cambia. Solo se actualizan las celdas
+por las que pasa alguna calle. Cada pasada lee un arreglo y escribe en otro, y los dos se
+intercambian. En GPU hay dos kernels: uno lee las vecinas de memoria global y otro carga antes un
+tile de 16 por 16 en shared memory y calcula las 14 por 14 celdas de adentro. La convergencia se
+revisa cada 16 pasadas con una reducción que cuenta los bloques que cambiaron. En la ventana, la
+tecla `c` muestra u oculta la capa, de verde (cerca) a rojo (lejos); al terminar, el programa
+informa la zona peor cubierta.
+
+Los indicadores de entrega resumen los tiempos de entrega en tres números que se calculan juntos:
+la suma, de donde sale el promedio, el máximo y cuántas entregas pasaron de 45 minutos. En GPU
+cada hilo reduce primero 64 entregas en sus registros, el bloque combina los 256 parciales con un
+árbol en shared memory, y un segundo kernel reduce los parciales de los bloques hasta que queda
+uno. Son enteros, así que la tarjeta y la CPU dan exactamente lo mismo. Al terminar, el programa
+imprime el promedio, la entrega más lenta y cuántas pasaron de 45 minutos.
+
+La curva de pedidos en espera dice cuántos pedidos estaban creados y todavía sin entregar ni
+rechazar en cada segundo de la simulación. Se arma un arreglo con un lugar por segundo, donde cada
+pedido creado suma uno y cada pedido cerrado resta uno, y la curva es su suma acumulada. En GPU se
+acumula por secciones de 256 en shared memory, con dos kernels para comparar, Kogge-Stone y
+Brent-Kung, y los totales de las secciones se acumulan en niveles hasta que entran en una sola.
+Al terminar, el programa imprime el pico de pedidos en espera, el minuto en que ocurrió y cuántos
+quedaron al cierre.
+
+La tabla de pedidos por restaurante y franja horaria cuenta cuántos pedidos recibió cada
+restaurante en cada franja de diez minutos: un histograma de dos dimensiones. Son demasiados
+contadores para darle una copia a cada bloque en shared memory, así que en GPU se suma con
+atómicos directamente en la tabla global, con lectura intercalada. Un segundo kernel junta los
+pedidos seguidos que caen en el mismo contador antes de sumar, para comparar. Al terminar, el
+programa imprime el restaurante y la franja con más pedidos.
+
+La tendencia de la demanda suaviza en el tiempo la cantidad de pedidos por minuto: cada minuto
+pasa a ser un promedio ponderado de él y de los siete de cada lado, una convolución de una
+dimensión con 15 pesos gaussianos en memoria constante. En GPU hay dos kernels: uno lee los
+vecinos de memoria global y otro carga antes un tile de 256 valores con su borde en shared memory.
+Al terminar, el programa imprime el pico sostenido de la demanda y, para comparar, el minuto
+suelto más cargado.
+
+El campo de respuesta es como el de cobertura, pero cuenta también las motos ocupadas: una moto
+libre vale cero y una ocupada arranca con el tiempo que le falta para terminar su viaje, en el
+lugar donde va a quedar. Dice cuánto tardaría en llegar a cada zona la primera moto disponible.
+En GPU hay un kernel que hace 8 pasadas por lanzamiento: cada bloque carga en shared memory su
+tile de 16 por 16 con un borde de 8 celdas, hace las 8 pasadas ahí y escribe solo las celdas de
+adentro. Se compara con el kernel de una pasada por lanzamiento. Al terminar, el programa informa
+la zona peor atendida.
+
+El restaurante mejor ubicado sale de buscar, para cada par de esquinas, el restaurante que hace
+más corto el viaje de una a la otra pasando por él, y contar cuántos pares gana cada uno. Es un
+producto de matrices con mínimo y suma: los tiempos de cada esquina a cada restaurante por los de
+cada restaurante a cada esquina, tomados de la tabla de tiempos. En GPU hay un kernel con tiles
+en shared memory y otro que lee de memoria global, y el conteo se hace en la tarjeta, así que
+solo baja un contador por restaurante. Es la aplicación en la que la GPU gana de punta a punta.
+
+La mejor esquina para un restaurante nuevo es la que alcanza más esquinas ida y vuelta en menos
+de 10 minutos. La ida se lee de una fila de la tabla de tiempos y la vuelta de una columna, que
+en memoria queda salteada. Para leerla seguida se guarda una copia girada de la tabla, con las
+columnas como filas. En GPU hay un kernel que usa la copia girada y otro que lee la columna
+directamente, para medir cuánto aporta el giro.
+
+### Configuración de ciudad
+
+`config/ciudad.json` es la escala grande para las mediciones de GPU: un rectángulo de unos 5,5 por
+5,5 km de Santa Cruz de la Sierra, del centro al Cuarto Anillo norte con Equipetrol adentro, con
+4774 intersecciones, 7192 segmentos (4907 de un solo sentido), 200 restaurantes reales de la zona,
+3000 motos y ráfagas de hasta 400 pedidos. La red es fuertemente conexa: todo par de nodos tiene
+camino respetando los sentidos. Se regenera con:
+
+```sh
+python3 tools/make_city.py
+python3 tools/make_map.py --north -17.747 --south -17.798 --west -63.213 --east -63.162 --zoom 15 --out data/ciudad.png
+```

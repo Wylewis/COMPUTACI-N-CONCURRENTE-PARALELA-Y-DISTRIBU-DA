@@ -28,7 +28,9 @@ python3 tools/gpu_report.py --app demand_heatmap --laptop mac.csv --gpu pc.csv -
 
 Siete cuadrículas, de 64 × 64 a 4096 × 4096: de 4096 a 16,8 millones de celdas, más de tres
 órdenes de magnitud. La de 64 × 64 es la que usa el programa. Una corrida de calentamiento y 10
-medidas intercaladas, con la tarjeta despierta antes de cada medida de GPU.
+medidas intercaladas, con la tarjeta despierta antes de cada medida de GPU. El tiempo de punta a
+punta de la GPU cuenta también la reserva del arreglo de salida en la CPU, igual que las versiones
+de CPU.
 
 ## Diseño
 
@@ -73,24 +75,26 @@ Medianas en ms. La tabla completa está en `tabla.md`.
 
 | Cuadrícula | CPU 1 hilo, laptop | CPU 18 hilos, laptop | GPU kernel | GPU punta a punta | Kernel contra la mejor CPU | Punta a punta contra la mejor CPU |
 |---|---|---|---|---|---|---|
-| 64 × 64 | 0,037 | 0,046 | 0,077 | 0,966 | 0,31x | 0,02x |
-| 128 × 128 | 0,160 | 0,082 | 0,019 | 0,847 | 2,78x | 0,06x |
-| 256 × 256 | 0,580 | 0,106 | 0,025 | 1,014 | 4,24x | 0,10x |
-| 512 × 512 | 2,293 | 0,308 | 0,034 | 1,113 | 9,12x | 0,28x |
-| 1024 × 1024 | 9,400 | 0,991 | 0,062 | 2,733 | 15,69x | 0,36x |
-| 2048 × 2048 | 37,946 | 3,800 | 0,275 | 6,737 | 13,81x | 0,56x |
-| 4096 × 4096 | 174,671 | 14,580 | 1,383 | 23,072 | 10,54x | 0,63x |
+| 64 × 64 | 0,037 | 0,046 | 0,011 | 0,660 | 2,11x | 0,04x |
+| 128 × 128 | 0,160 | 0,082 | 0,010 | 0,674 | 5,16x | 0,08x |
+| 256 × 256 | 0,580 | 0,106 | 0,012 | 0,734 | 8,64x | 0,14x |
+| 512 × 512 | 2,293 | 0,308 | 0,022 | 1,050 | 13,98x | 0,29x |
+| 1024 × 1024 | 9,400 | 0,991 | 0,070 | 2,761 | 13,84x | 0,35x |
+| 2048 × 2048 | 37,946 | 3,800 | 0,269 | 8,039 | 14,11x | 0,47x |
+| 4096 × 4096 | 174,671 | 14,580 | 0,969 | 65,185 | 15,05x | 0,22x |
 
 ![Tiempo contra tamaño](tiempo.png)
 
-- **El kernel le gana a la laptop desde 128 × 128**, y por mucho: entre 9 y 16 veces desde
-  512 × 512. Es la mayor ventaja de kernel de todas las aplicaciones medidas hasta ahora.
-- **De punta a punta no hay cruce contra la laptop**, pero se acerca al crecer: 0,28, 0,36, 0,56 y
-  0,63 veces en los cuatro tamaños mayores.
-- **En la misma máquina el cruce está en 512 × 512**, 262 000 celdas, y llega a 4,7 veces con
-  4096 × 4096.
-- **El kernel es entre el 2 y el 8 % del tiempo de punta a punta.** El resto es subir la
-  cuadrícula y bajar el resultado, 64 MB cada uno en el tamaño mayor.
+- **El kernel le gana a la laptop en todos los tamaños**, y por mucho: entre 14 y 15 veces desde
+  512 × 512.
+- **De punta a punta no hay cruce contra la laptop.** Se acerca hasta 0,47 veces en 2048 × 2048 y
+  vuelve a alejarse en 4096 × 4096, 0,22 veces, donde reservar y copiar los 64 MB del resultado
+  pesa más que todo lo demás.
+- **En la misma máquina el cruce está en 512 × 512**, 262 000 celdas, y la ventaja llega a 2,0
+  veces con 2048 × 2048.
+- **El kernel es entre el 1,5 y el 3,4 % del tiempo de punta a punta.** El resto es subir la
+  cuadrícula, bajar el resultado y reservar la memoria para recibirlo, 64 MB cada uno en el
+  tamaño mayor.
 
 ![Reparto del tiempo de GPU](copias.png)
 
@@ -100,15 +104,15 @@ Tiempo del kernel en la PC, en ms.
 
 | Cuadrícula | Pesos en memoria global | Pesos en memoria constante | Cuánto gana la memoria constante |
 |---|---|---|---|
-| 64 × 64 | 0,053 | 0,077 | 0,68x |
-| 128 × 128 | 0,049 | 0,019 | 2,57x |
-| 256 × 256 | 0,058 | 0,025 | 2,33x |
-| 512 × 512 | 0,070 | 0,034 | 2,07x |
-| 1024 × 1024 | 0,106 | 0,062 | 1,71x |
-| 2048 × 2048 | 0,443 | 0,275 | 1,61x |
-| 4096 × 4096 | 2,264 | 1,383 | 1,64x |
+| 64 × 64 | 0,012 | 0,011 | 1,10x |
+| 128 × 128 | 0,016 | 0,010 | 1,56x |
+| 256 × 256 | 0,016 | 0,012 | 1,32x |
+| 512 × 512 | 0,031 | 0,022 | 1,42x |
+| 1024 × 1024 | 0,103 | 0,070 | 1,47x |
+| 2048 × 2048 | 0,425 | 0,269 | 1,58x |
+| 4096 × 4096 | 1,680 | 0,969 | 1,73x |
 
-Con los pesos en memoria constante el kernel va entre 1,6 y 2,6 veces más rápido desde
+Con los pesos en memoria constante el kernel va entre 1,3 y 1,7 veces más rápido desde
 128 × 128. Cada hilo lee 49 pesos; en memoria global son 49 lecturas más por celda, y en memoria
 constante la tarjeta los sirve desde una caché dedicada. En la cuadrícula de 64 × 64 la diferencia
 está dentro del ruido.
@@ -118,8 +122,9 @@ está dentro del ruido.
 **Paralelismo disponible.** Una celda por hilo. La tarjeta aloja 58 368 hilos: la cuadrícula del
 programa, de 4096 celdas, usa el 7 %, y recién con 256 × 256 queda llena.
 
-**Sobrecostos.** Deciden el resultado de punta a punta. El piso es de 0,85 ms aunque la cuadrícula
-sea chica, y en las grandes pesan las dos copias: `nsys` da 11 ms para la mayor.
+**Sobrecostos.** Deciden el resultado de punta a punta. El piso es de 0,66 ms aunque la cuadrícula
+sea chica, y en las grandes pesan las dos copias, que `nsys` da en 11 ms para la mayor, y la
+reserva del resultado en la CPU.
 
 **Límite por memoria o por cómputo.** Por celda el kernel hace 49 multiplicaciones y 49 sumas, y
 el tráfico propio de la celda son 8 bytes: 4 de entrada y 4 de salida. Son unas 12 operaciones
@@ -141,15 +146,15 @@ suavizado pasa por el hilo dueño de la GPU.
 que cambia entre CPU y GPU es el redondeo, cubierto por la tolerancia.
 
 **Efecto en el programa.** La capa usa 64 × 64 celdas. Un hilo de la laptop la suaviza en 0,04 ms;
-la GPU tarda cerca de 1 ms de punta a punta. A 30 cuadros por segundo ninguna de las dos pesa en
+la GPU tarda 0,66 ms de punta a punta. A 30 cuadros por segundo ninguna de las dos pesa en
 el dibujo de la ventana.
 
 ## Veredicto
 
-- **En el programa, CPU.** Con 64 × 64 celdas un hilo es más de 20 veces más rápido que la ida y
-  vuelta a la tarjeta.
-- **Contra la laptop, CPU en todo el rango medido**, aunque el kernel es hasta 16 veces más
-  rápido: las copias se llevan más del 90 % del tiempo.
+- **En el programa, CPU.** Con 64 × 64 celdas un hilo es 18 veces más rápido que la ida y vuelta
+  a la tarjeta.
+- **Contra la laptop, CPU en todo el rango medido**, aunque el kernel es hasta 15 veces más
+  rápido: las copias y la reserva se llevan más del 96 % del tiempo.
 - **En la misma máquina, GPU desde 512 × 512.**
 - **La GPU pasaría a convenir si la cuadrícula no viajara**: si el conteo se hiciera en la tarjeta
   y la capa se dibujara desde ahí, quedaría solo el kernel.
@@ -165,5 +170,8 @@ el dibujo de la ventana.
   necesita más de 64 × 64.
 - **La imagen de la capa usa demanda de ejemplo**, no una corrida.
 - **Tarjeta a régimen.** Las medidas se toman después de despertar la tarjeta.
+- **La reserva de memoria pesa mucho en la PC.** En 4096 × 4096, reservar los 64 MB del resultado
+  dentro del contenedor sobre WSL2 cuesta decenas de milisegundos, y es lo que hace caer la
+  comparación de punta a punta en ese tamaño.
 - **La PC no estaba en reposo** y corre en un contenedor sobre WSL2. `ncu` no perfila ahí; la
   ocupación sale de `--gpu-info` y el reparto del tiempo de eventos CUDA y de `nsys`.

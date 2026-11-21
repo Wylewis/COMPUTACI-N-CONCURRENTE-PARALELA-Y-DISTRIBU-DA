@@ -45,6 +45,8 @@ Se miden tres cosas:
 
 Una corrida de calentamiento y 10 medidas intercaladas. Antes de cada medida de GPU el medidor
 despierta la tarjeta, como explica el README: las 300 medidas de `pc.csv` se tomaron a régimen.
+En el agrupado solo, el tiempo de punta a punta de la GPU cuenta también la reserva de los
+arreglos de salida en la CPU, igual que las versiones de CPU.
 
 ## Diseño
 
@@ -93,52 +95,56 @@ Medianas en ms. Las tablas completas, con mínimos y máximos, están en los tre
 
 | Pedidos / restaurantes | CPU 1 hilo, laptop | CPU 18 hilos, laptop | GPU kernel | GPU punta a punta | Kernel contra la mejor CPU | Punta a punta contra la mejor CPU |
 |---|---|---|---|---|---|---|
-| 400 / 20 | 0,001 | 0,156 | 0,065 | 0,671 | 0,01x | 0,00x |
-| 4000 / 200 | 0,003 | 0,199 | 0,054 | 0,629 | 0,05x | 0,00x |
-| 40 mil / 2 mil | 0,028 | 0,220 | 0,080 | 0,711 | 0,34x | 0,04x |
-| 400 mil / 20 mil | 0,397 | 0,372 | 0,140 | 1,508 | 1,75x | 0,16x |
-| 4 millones / 200 mil | 7,005 | 2,350 | 1,662 | 8,595 | 1,33x | 0,26x |
-| 16 millones / 800 mil | 64,542 | 23,637 | 15,821 | 38,048 | 1,34x | 0,56x |
+| 400 / 20 | 0,001 | 0,156 | 0,062 | 0,685 | 0,01x | 0,00x |
+| 4000 / 200 | 0,003 | 0,199 | 0,063 | 0,697 | 0,04x | 0,00x |
+| 40 mil / 2 mil | 0,028 | 0,220 | 0,087 | 0,818 | 0,32x | 0,03x |
+| 400 mil / 20 mil | 0,397 | 0,372 | 0,150 | 1,777 | 1,63x | 0,14x |
+| 4 millones / 200 mil | 7,005 | 2,350 | 1,657 | 9,949 | 1,34x | 0,22x |
+| 16 millones / 800 mil | 64,542 | 23,637 | 15,871 | 79,931 | 1,33x | 0,26x |
 
 ![Agrupado solo](agrupar_tiempo.png)
 
-- **El kernel le gana a la laptop desde 400 000 pedidos**, entre 1,3 y 1,75 veces.
-- **De punta a punta no hay cruce contra la laptop.** La GPU llega a 0,56 veces con 16 millones.
-  Suben 64 MB y bajan 67; el kernel es el 42 % del tiempo en ese tamaño y el 10 % en los chicos.
+- **El kernel le gana a la laptop desde 400 000 pedidos**, entre 1,3 y 1,6 veces.
+- **De punta a punta no hay cruce contra la laptop.** La GPU llega a 0,27 veces con 16 millones.
+  Suben 64 MB, bajan 67 y hay que reservar en la CPU la memoria para recibirlos; el kernel es el
+  20 % del tiempo en ese tamaño y el 9 % en los chicos.
 - **En el tamaño de la ciudad, 4000 pedidos, un hilo tarda 3 microsegundos.** La GPU tarda 0,6 ms
-  solo en ir y volver: 200 veces más.
+  solo en ir y volver: más de 200 veces más.
 
 En la misma máquina sí hay cruce, en 4 millones de pedidos:
 
 | Pedidos / restaurantes | CPU 1 hilo, PC | CPU 16 hilos, PC | GPU kernel | GPU punta a punta | Punta a punta contra la mejor CPU de la PC |
 |---|---|---|---|---|---|
-| 400 / 20 | 0,002 | 1,150 | 0,065 | 0,671 | 0,00x |
-| 4000 / 200 | 0,007 | 1,480 | 0,054 | 0,629 | 0,01x |
-| 40 mil / 2 mil | 0,067 | 1,487 | 0,080 | 0,711 | 0,09x |
-| 400 mil / 20 mil | 2,086 | 2,245 | 0,140 | 1,508 | 0,67x |
-| 4 millones / 200 mil | 66,470 | 17,001 | 1,662 | 8,595 | 1,98x |
-| 16 millones / 800 mil | 495,813 | 265,969 | 15,821 | 38,048 | 5,60x |
+| 400 / 20 | 0,002 | 1,136 | 0,062 | 0,685 | 0,00x |
+| 4000 / 200 | 0,006 | 1,462 | 0,063 | 0,697 | 0,01x |
+| 40 mil / 2 mil | 0,086 | 1,484 | 0,087 | 0,818 | 0,11x |
+| 400 mil / 20 mil | 1,751 | 2,161 | 0,150 | 1,777 | 0,51x |
+| 4 millones / 200 mil | 75,443 | 17,150 | 1,657 | 9,949 | 1,72x |
+| 16 millones / 800 mil | 509,166 | 261,516 | 15,871 | 79,931 | 2,59x |
 
-La versión multihilo de CPU rinde poco en las dos máquinas: 3,1 veces con 18 hilos en la laptop y
-1,9 con 16 en la PC, en el tamaño mayor. Cada hilo cuenta en su propia tabla y después hay que
+La ventaja en la misma máquina llega a 2,6 veces con 16 millones de pedidos. La versión multihilo
+de CPU rinde poco en las dos máquinas: 3,0 veces en la laptop y 2,5 en la PC con su mejor número
+de hilos, en el tamaño mayor. Cada hilo cuenta en su propia tabla y después hay que
 juntarlas, y el reparto escribe en posiciones salteadas de un arreglo de 64 MB.
 
 ### Cuánto del agrupado es el scan
 
 | Pedidos / restaurantes | Los tres pasos, kernel | Solo el scan, kernel | Parte del scan | Punta a punta | Parte del kernel |
 |---|---|---|---|---|---|
-| 400 / 20 | 0,065 | 0,042 | 65 % | 0,671 | 10 % |
-| 4000 / 200 | 0,054 | 0,040 | 74 % | 0,629 | 9 % |
-| 40 mil / 2 mil | 0,080 | 0,077 | 97 % | 0,711 | 11 % |
-| 400 mil / 20 mil | 0,140 | 0,113 | 81 % | 1,508 | 9 % |
-| 4 millones / 200 mil | 1,662 | 0,153 | 9 % | 8,595 | 19 % |
-| 16 millones / 800 mil | 15,821 | 0,682 | 4 % | 38,048 | 42 % |
+| 400 / 20 | 0,062 | 0,037 | 59 % | 0,685 | 9 % |
+| 4000 / 200 | 0,063 | 0,036 | 57 % | 0,697 | 9 % |
+| 40 mil / 2 mil | 0,087 | 0,102 | 118 % | 0,818 | 11 % |
+| 400 mil / 20 mil | 0,150 | 0,103 | 68 % | 1,777 | 8 % |
+| 4 millones / 200 mil | 1,657 | 0,148 | 9 % | 9,949 | 17 % |
+| 16 millones / 800 mil | 15,871 | 0,730 | 5 % | 79,931 | 20 % |
 
-El scan es el paso del concepto y es el barato: 0,68 ms para 800 000 conteos, el 4 % del kernel
+El scan es el paso del concepto y es el barato: 0,73 ms para 800 000 conteos, el 5 % del kernel
 en el tamaño mayor. Lo caro son los otros dos pasos, que no recorren la memoria en orden: 16
 millones de sumas atómicas sobre contadores elegidos al azar y 16 millones de escrituras
 salteadas. En los tamaños chicos pasa al revés: el scan es casi todo el kernel, porque son 17
-barreras por bloque aunque haya 20 números que sumar.
+barreras por bloque aunque haya 20 números que sumar. Con 40 mil pedidos el scan medido solo salió
+algo por encima de los tres pasos juntos: son tiempos de menos de 0,1 ms y la diferencia está
+dentro de la dispersión.
 
 ### El efecto en la ronda de estimación
 
@@ -190,10 +196,10 @@ con qué llenarse. Una ronda de la ciudad, 4000 pedidos, ocupa 16 bloques.
 
 **Sobrecostos.** El agrupado en GPU tiene un piso de 0,6 ms: seis reservas o más, dos puestas a
 cero, tres copias y tres lanzamientos o más. `nsys` da medianas de 4 µs por reserva, 17 µs por puesta
-a cero y 51 µs por copia. En los tamaños grandes pesan las copias: con 16 millones de pedidos el
-kernel son 15,8 de los 38 ms.
+a cero y 51 µs por copia. En los tamaños grandes pesan las copias y la reserva de la salida en la
+CPU: con 16 millones de pedidos el kernel son 15,9 de los 80 ms.
 
-**Límite por memoria.** El scan lee y escribe en orden: 3,2 MB de conteos en 0,68 ms. El conteo
+**Límite por memoria.** El scan lee y escribe en orden: 3,2 MB de conteos en 0,73 ms. El conteo
 y el reparto no: cada pedido toca un contador y una posición de salida que dependen de su
 restaurante. Con 4 millones de pedidos el kernel procesa 2400 millones de pedidos por segundo;
 con 16 millones baja a 1000 millones; lo más probable es que los contadores y la salida ya no
@@ -249,6 +255,9 @@ tabla están dentro de lo que cambia de una corrida a otra.
   concentrada los atómicos chocan más y los tramos son desiguales; eso se probó pero no se midió.
 - **La proporción de 20 pedidos por restaurante es fija.** Con más restaurantes por pedido el
   scan pesa más, y con menos, menos.
+- **La reserva de memoria pesa mucho en la PC.** Con 16 millones de pedidos, reservar los 67 MB
+  de salida dentro del contenedor sobre WSL2 cuesta decenas de milisegundos, y por eso la
+  comparación de punta a punta en la misma máquina no pasa de 2,6 veces.
 - **Tarjeta a régimen.** Las medidas se toman después de despertar la tarjeta. En el programa,
   con rondas chicas y espaciadas, la tarjeta puede estar a baja frecuencia; eso no se midió.
 - **Cerca de 1 ms sin explicar en las rondas grandes.** Desde 500 × 3000 hay alrededor de 1 ms

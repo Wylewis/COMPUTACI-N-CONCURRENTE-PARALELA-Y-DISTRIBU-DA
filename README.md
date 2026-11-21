@@ -4,6 +4,8 @@ Simulación concurrente de despacho de pedidos en la Zona Equipetrol, Santa Cruz
 Proyecto final del curso LIA-221 Computación Concurrente, Paralela y Distribuida.
 
 El informe final, con las herramientas, los experimentos y las dependencias, está en [INFORME.pdf](INFORME.pdf).
+El informe de la parte de GPU, con las 14 aplicaciones y sus mediciones, está en
+[INFORME_GPU.pdf](INFORME_GPU.pdf).
 
 ## Pasos para correr todo
 

@@ -100,9 +100,13 @@ void benchTravelTable(BenchRunner& runner) {
             r.correct = out == expected;
             return r;
         };
+        bool reported = false;
         c.gpu = [&] {
             GpuOutcome r;
-            const std::vector<int> out = travelTableGpu(g, &r.times);
+            int squarings = 0;
+            const std::vector<int> out = travelTableGpu(g, &r.times, &squarings);
+            if (!reported) std::cerr << "bench: travel_table " << c.size << ": " << squarings << " elevaciones al cuadrado\n";
+            reported = true;
             r.correct = out == expected;
             return r;
         };
